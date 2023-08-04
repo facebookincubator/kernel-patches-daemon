@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "project": "bpf",
+  "pw_server": "patchwork.kernel.org",
+  "pw_url": "https://patchwork.kernel.org/",
+  "pw_lookback": 7,
+  "pw_search_patterns": [{"archived": false, "delegate": 77147}],
+  "tag_to_branch_mapping": {
+    "bpf": ["bpf"],
+    "bpf-next": ["bpf-next"],
+    "__DEFAULT__": ["bpf-next", "bpf"]
+  },
+  "branches": {
+    "bpf-next": {
+      "repo": "git@github.com:kernel-patches/bpf",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git",
+      "upstream_branch": "master",
+      "ci_repo": "git@github.com:kernel-patches/vmtest",
+      "ci_branch": "master",
+      "github_oauth_token": "TOKEN"
+    },
+    "bpf": {
+      "repo": "git@github.com:kernel-patches/bpf",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf.git",
+      "upstream_branch": "master",
+      "ci_repo": "git@github.com:kernel-patches/vmtest",
+      "ci_branch": "master",
+      "github_oauth_token": "TOKEN"
+    }
+  }
+}

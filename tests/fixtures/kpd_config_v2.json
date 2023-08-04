@@ -1,0 +1,39 @@
+{
+    "version": 2,
+    "project": "unittest",
+    "pw_server": "patchwork.kernel.org",
+    "pw_url": "https://patchwork.kernel.org/",
+    "pw_token": "unittest_token",
+    "pw_user": "unittest_user",
+    "pw_lookback": 1,
+    "pw_search_patterns": [
+        {
+            "key": "value"
+        }
+    ],
+    "tag_to_branch_mapping": {
+        "tag": [
+            "branch"
+        ]
+    },
+    "branches": {
+        "app_auth_key": {
+            "repo": "https://repo.git",
+            "upstream": "https://upstream.git",
+            "upstream_branch": "upstream_branch",
+            "ci_repo": "https://cirepo.git",
+            "ci_branch": "ci_branch",
+            "github_app_id": 123,
+            "github_installation_id": 456,
+            "github_private_key": "/key.pem"
+        },
+        "oauth": {
+            "repo": "https://repo.git",
+            "upstream": "https://upstream.git",
+            "upstream_branch": "upstream_branch",
+            "ci_repo": "https://cirepo.git",
+            "ci_branch": "ci_branch",
+            "github_oauth_token": "TEST_OAUTH_TOKEN"
+        }
+    }
+}

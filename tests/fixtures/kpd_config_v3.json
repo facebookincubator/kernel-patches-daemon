@@ -1,0 +1,55 @@
+{
+    "version": 3,
+    "patchwork": {
+      "server": "patchwork.kernel.org",
+      "project": "unittest",
+      "api_username": "unittest_user",
+      "api_token": "unittest_token",
+      "search_patterns": [
+        {
+          "key": "value"
+        }
+      ],
+      "lookback": 1
+    },
+    "tag_to_branch_mapping": {
+      "tag": [
+        "branch"
+      ]
+    },
+    "branches": {
+      "app_auth_key": {
+        "github_app_auth": {
+          "app_id": 123,
+          "installation_id": 456,
+          "private_key": "TEST_KEY_CONTENT"
+        },
+        "repo": "https://repo.git",
+        "upstream": "https://upstream.git",
+        "upstream_branch": "upstream_branch",
+        "ci_repo": "https://cirepo.git",
+        "ci_branch": "ci_branch"
+      },
+      "app_auth_key_path": {
+        "github_app_auth": {
+          "app_id": 123,
+          "installation_id": 456,
+          "private_key_path": "/key.pem"
+        },
+        "repo": "https://repo.git",
+        "upstream": "https://upstream.git",
+        "upstream_branch": "upstream_branch",
+        "ci_repo": "https://cirepo.git",
+        "ci_branch": "ci_branch"
+      },
+      "oauth": {
+        "github_oauth_token": "TEST_OAUTH_TOKEN",
+        "repo": "https://repo.git",
+        "upstream": "https://upstream.git",
+        "upstream_branch": "upstream_branch",
+        "ci_repo": "https://cirepo.git",
+        "ci_branch": "ci_branch"
+      }
+    },
+    "base_directory": "/repos"
+  }
