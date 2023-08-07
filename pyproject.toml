@@ -30,7 +30,8 @@ python-dateutil = "^2.8.2"
 # Explicitely include cryptography package
 # It's required for PyJWT which is dependency of PyGithub
 # https://pyjwt.readthedocs.io/en/stable/installation.html#cryptographic-dependencies-optional
-cryptography = "^41.0.0"
+cryptography = "^41.0.3"
+certifi = "^2023.7.22"
 
 [tool.poetry.group.dev.dependencies]
 freezegun = "^1.2.2"
