@@ -25,6 +25,8 @@ from multidict import MultiDict
 from opentelemetry import metrics
 from pyre_extensions import none_throws
 
+DEFAULT_HTTP_RETRIES = 3
+
 # when we want to push this patch through CI
 RELEVANT_STATES: Dict[str, int] = {
     "new": 1,
@@ -481,7 +483,7 @@ class Patchwork:
         auth_token: Optional[str] = None,
         lookback_in_days: int = 7,
         api_version: str = "1.2",
-        http_retries: Optional[int] = None,
+        http_retries: int = DEFAULT_HTTP_RETRIES,
     ) -> None:
         self.api_url = f"https://{server}/api/{api_version}/"
         self.auth_token = auth_token
