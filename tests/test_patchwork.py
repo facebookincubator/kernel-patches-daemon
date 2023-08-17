@@ -6,16 +6,17 @@
 
 import copy
 import datetime
+import re
 import unittest
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Union
-from unittest.mock import patch
 
-import requests
+from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from kernel_patches_daemon.patchwork import parse_tags, RELEVANT_STATES, Subject, TTL
 from kernel_patches_daemon.stats import STATS_KEY_BUG
+from multidict import MultiDict
 from pyre_extensions import none_throws
 
 from tests.common.patchwork_mock import (
@@ -27,87 +28,98 @@ from tests.common.patchwork_mock import (
     FOO_SERIES_LAST,
     get_default_pw_client,
     get_dict_key,
-    pw_response_generator,
-    ResponseMock,
+    init_pw_responses,
 )
 
 
-class PatchworkTestCase(unittest.TestCase):
+class PatchworkTestCase(unittest.IsolatedAsyncioTestCase):
     """
     Base TestCase class that ensure any patchwork related test cases are properly initialized.
     """
 
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
         self._pw = get_default_pw_client()
-        self._pw_post_patcher = patch.object(requests.Session, "post").start()
-        self._pw_get_patcher = patch.object(requests.Session, "get").start()
 
 
 class TestPatchwork(PatchworkTestCase):
-    def test_get_wrapper(self) -> None:
+    @aioresponses()
+    async def test_get_wrapper(self, m) -> None:
         """
         Simple test to ensure that GET requests are properly mocked.
         """
-        self._pw_get_patcher.return_value = ResponseMock(
-            b"""{"key1": "value1", "key2": 2}""", 200
-        )
-        resp = self._pw._Patchwork__get("object").json()
-        self._pw_get_patcher.assert_called_once()
-        self.assertEqual(resp["key1"], "value1")
+        pattern = re.compile(r"^.*$")
+        m.get(pattern, status=200, body=b"""{"key1": "value1", "key2": 2}""")
 
-    def test_post_wrapper(self) -> None:
+        resp = await self._pw._Patchwork__get("object")
+        m.assert_called_once()
+
+        json_resp = await resp.json()
+        self.assertEqual(json_resp["key1"], "value1")
+
+    @aioresponses()
+    async def test_post_wrapper(self, m) -> None:
         """
         Simple test to ensure that POST requests are properly mocked.
         """
-        self._pw_post_patcher.return_value = ResponseMock(
-            b"""{"key1": "value1", "key2": 2}""", 200
-        )
+        pattern = re.compile(r"^.*$")
+        m.post(pattern, status=200, body=b"""{"key1": "value1", "key2": 2}""")
         # Make sure user and token are set so the requests is actually posted.
         self._pw.pw_token = "1234567890"
         self._pw.pw_user = "somerandomuser"
-        resp = self._pw._Patchwork__post("some/random/url", "somerandomdata").json()
-        self._pw_post_patcher.assert_called_once()
-        self.assertEqual(resp["key1"], "value1")
+        resp = await self._pw._Patchwork__post("some/random/url", "somerandomdata")
+        m.assert_called_once()
 
-    def test_get_objects_recursive(self) -> None:
+        json_resp = await resp.json()
+        self.assertEqual(json_resp["key1"], "value1")
+
+    async def test_get_objects_recursive(self) -> None:
+        url = "https://127.0.0.1:0/api/1.1/projects/"
+
+        @dataclass
+        class Response:
+            body: bytes
+            headers: Dict[str, str]
+            url: str = "https://127.0.0.1:0/api/1.1/projects/"
+            status_code: int = 200
+
         @dataclass
         class TestCase:
             name: str
-            pages: List[ResponseMock]
+            pages: List[Response]
             expected: List[Any]
             get_calls: int
-            filters: Optional[Dict[str, Union[str, List[str]]]] = None
+            filters: Optional[Union[Dict[str, str], MultiDict]] = None
 
         test_cases = [
             TestCase(
                 name="single page",
-                pages=[ResponseMock(json_content=b'["a","b","c"]', status_code=200)],
+                pages=[Response(url=url, body=b'["a","b","c"]', headers={})],
                 expected=["a", "b", "c"],
                 get_calls=1,
             ),
             TestCase(
                 name="Multiple pages with proper formatting",
                 pages=[
-                    ResponseMock(
-                        json_content=b'["a"]',
+                    Response(
+                        url=url,
+                        body=b'["a"]',
                         headers={
                             "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=2>; rel="next"'
                         },
-                        status_code=200,
                     ),
-                    ResponseMock(
-                        json_content=b'["b"]',
+                    Response(
+                        url=url + "?page=2",
+                        body=b'["b"]',
                         headers={
                             "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=3>; rel="next", <https://127.0.0.1:0/api/1.1/projects/>; rel="prev"'
                         },
-                        status_code=200,
                     ),
-                    ResponseMock(
-                        json_content=b'["c"]',
+                    Response(
+                        url=url + "?page=3",
+                        body=b'["c"]',
                         headers={
                             "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=2>; rel="prev"'
                         },
-                        status_code=200,
                     ),
                 ],
                 expected=["a", "b", "c"],
@@ -115,49 +127,67 @@ class TestPatchwork(PatchworkTestCase):
             ),
             TestCase(
                 name="single page with single filters",
-                pages=[ResponseMock(json_content=b'["a","b","c"]', status_code=200)],
+                pages=[
+                    Response(
+                        url=url + "?k1=v1&k2=v2", body=b'["a","b","c"]', headers={}
+                    )
+                ],
                 expected=["a", "b", "c"],
                 get_calls=1,
                 filters={"k1": "v1", "k2": "v2"},
             ),
             TestCase(
                 name="single page with list filters",
-                pages=[ResponseMock(json_content=b'["a","b","c"]', status_code=200)],
+                pages=[
+                    Response(
+                        url=url + "?k1=v1&k2=v2&k2=v2.2",
+                        body=b'["a","b","c"]',
+                        headers={},
+                    )
+                ],
                 expected=["a", "b", "c"],
                 get_calls=1,
-                filters={"k1": "v1", "k2": ["v2", "v2.2"]},
+                filters=MultiDict([("k1", "v1"), ("k2", "v2"), ("k2", "v2.2")]),
             ),
         ]
 
         for case in test_cases:
             with self.subTest(msg=case.name):
-                self._pw_get_patcher.reset_mock()
-                self._pw_get_patcher.side_effect = case.pages
-                resp = self._pw._Patchwork__get_objects_recursive(
-                    "foo", params=case.filters
-                )
-                self.assertEqual(resp, case.expected)
-                self.assertEqual(self._pw_get_patcher.call_count, case.get_calls)
-                # Check that our filters are passed to request.get
-                params = self._pw_get_patcher.call_args_list[0].kwargs["params"]
-                self.assertEqual(params, case.filters)
+                with aioresponses() as m:
+                    for resp in case.pages:
+                        m.get(
+                            resp.url,
+                            status=resp.status_code,
+                            headers=resp.headers,
+                            body=resp.body,
+                        )
 
-    def test_try_post_nocred_nomutation(self) -> None:
+                    resp = await self._pw._Patchwork__get_objects_recursive(
+                        "projects", params=case.filters
+                    )
+                    self.assertEqual(resp, case.expected)
+                    self.assertEqual(
+                        sum([len(x) for x in m.requests.values()]), case.get_calls
+                    )
+
+    @aioresponses()
+    async def test_try_post_nocred_nomutation(self, m) -> None:
         """
         When pw_token is not set or is an empty string, we will not call post.
         """
-
+        pattern = re.compile(r"^.*$")
+        m.post(pattern, status=200)
         self._pw.auth_token = None
-        self._pw._Patchwork__try_post(
+        await self._pw._Patchwork__try_post(
             "https://127.0.0.1:0/some/random/url", "somerandomdata"
         )
-        self._pw_post_patcher.assert_not_called()
+        m.assert_not_called()
 
         self._pw.auth_token = ""
-        self._pw._Patchwork__try_post(
+        await self._pw._Patchwork__try_post(
             "https://127.0.0.1:0/some/random/url", "somerandomdata"
         )
-        self._pw_post_patcher.assert_not_called()
+        m.assert_not_called()
 
     def test_format_since(self) -> None:
         @dataclass
@@ -232,31 +262,34 @@ class TestPatchwork(PatchworkTestCase):
 
 
 class TestSeries(PatchworkTestCase):
-    def test_series_closed(self) -> None:
+    @aioresponses()
+    async def test_series_closed(self, m) -> None:
         """
         If one of the patch is irrelevant, the series is closed.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(666)
-        self.assertTrue(series.is_closed())
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(666)
+        self.assertTrue(await series.is_closed())
 
-    def test_series_not_closed(self) -> None:
+    @aioresponses()
+    async def test_series_not_closed(self, m) -> None:
         """
         If none of the patches are irrelevant, the series is not closed.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(665)
-        self.assertFalse(series.is_closed())
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(665)
+        self.assertFalse(await series.is_closed())
 
-    def test_series_tags(self) -> None:
+    @aioresponses()
+    async def test_series_tags(self, m) -> None:
         """
         Series tags are extracted from the diffs/cover letter/serie's name. We extract the content
         from the square bracket content prefixing those names and filter some out.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(665)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(665)
         self.assertEqual(
-            series.all_tags(),
+            await series.all_tags(),
             {
                 # cover letter tags
                 "cover letter tag",
@@ -275,14 +308,15 @@ class TestSeries(PatchworkTestCase):
             },
         )
 
-    def test_series_visible_tags(self) -> None:
+    @aioresponses()
+    async def test_series_visible_tags(self, m) -> None:
         """
         Series' visible tags are only taken from patch states and series version.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(665)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(665)
         self.assertEqual(
-            series.visible_tags(),
+            await series.visible_tags(),
             {
                 # relevant states
                 get_dict_key(RELEVANT_STATES),
@@ -292,48 +326,52 @@ class TestSeries(PatchworkTestCase):
             },
         )
 
-    def test_series_tags_handle_missing_values(self) -> None:
+    @aioresponses()
+    async def test_series_tags_handle_missing_values(self, m) -> None:
         """
         Test that we handle correctly series with empty cover_letter and/or no attaches patches.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(667)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(667)
         self.assertEqual(
-            series.all_tags(),
+            await series.all_tags(),
             {
                 "V1",
             },
         )
 
-    def test_series_is_expired(self) -> None:
+    @aioresponses()
+    async def test_series_is_expired(self, m) -> None:
         """
         Test that when we are passed expiration date, the series is reported expired.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(668)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(668)
         ttl = TTL[get_dict_key(TTL)]
         # take the date of the patch and move to 1 second after that.
         now = datetime.datetime.fromisoformat(DEFAULT_FREEZE_DATE) + datetime.timedelta(
             seconds=ttl + 1
         )
         with freeze_time(now):
-            self.assertTrue(series.is_expired())
+            self.assertTrue(await series.is_expired())
 
-    def test_series_is_not_expired(self) -> None:
+    @aioresponses()
+    async def test_series_is_not_expired(self, m) -> None:
         """
         Test that when we are not yet passed expiration date, the series is not reported expired.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
-        series = self._pw.get_series_by_id(668)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(668)
         ttl = TTL[get_dict_key(TTL)]
         # take the date of the patch and move to 1 second before that.
         now = datetime.datetime.fromisoformat(DEFAULT_FREEZE_DATE) + datetime.timedelta(
             seconds=ttl - 1
         )
         with freeze_time(now):
-            self.assertFalse(series.is_expired())
+            self.assertFalse(await series.is_expired())
 
-    def test_get_latest_check_for_patct(self) -> None:
+    @aioresponses()
+    async def test_get_latest_check_for_patch(self, m) -> None:
         """
         Tests `get_latest_check_for_patch` function,
         which now makes a GET request with additional queries to ensure that
@@ -345,7 +383,7 @@ class TestSeries(PatchworkTestCase):
         CTX_URLENCODED = "vmtest+bpf-next-PR"
         EXPECTED_ID = 42
         contexts_responses = {
-            f"https://127.0.0.1/api/1.1/patches/12859379/checks/?context={CTX_URLENCODED}&order=-date&per_page=1": [
+            f"https://127.0.0.1:0/api/1.1/patches/12859379/checks/?context={CTX_URLENCODED}&order=-date&per_page=1": [
                 {
                     "context": CTX,
                     "date": "2010-01-02T00:00:00",
@@ -354,12 +392,13 @@ class TestSeries(PatchworkTestCase):
                 },
             ],
         }
+        init_pw_responses(m, contexts_responses)
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        check = self._pw.get_latest_check_for_patch(12859379, CTX)
+        check = await self._pw.get_latest_check_for_patch(12859379, CTX)
         self.assertEqual(check["id"], EXPECTED_ID)
 
-    def test_series_checks_update_all_diffs(self) -> None:
+    @aioresponses()
+    async def test_series_checks_update_all_diffs(self, m) -> None:
         """
         Test that we update all the diffs in a serie if there is either no existing check
         or checks need update.
@@ -368,28 +407,37 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
                         "state": "pending",
                     },
                 ],
-                # Patch without existing context
-                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                # Patches without existing context
+                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        series = self._pw.get_series_by_id(665)
-        series.set_check(
+        init_pw_responses(m, contexts_responses)
+
+        post_pattern = re.compile(r"^.*$")
+        m.post(post_pattern, status=200, repeat=True)
+
+        series = await self._pw.get_series_by_id(665)
+        await series.set_check(
             context=DEFAULT_CHECK_CTX,
             state=None,
             target_url="https://127.0.0.1:0/target",
         )
-        self.assertEqual(self._pw_post_patcher.call_count, 3)
+        # Hack... aioresponses stores the requests that were made in a dictionary whose's key is a tuple,
+        # of the form (method, url).
+        # https://github.com/pnuckowski/aioresponses/blob/56b843319d5d0ae8a405f188e68d7ba8c7573bc8/aioresponses/core.py#L507
+        self.assertEqual(len([x for x in m.requests.keys() if x[0] == "POST"]), 3)
 
-    def test_series_checks_no_update_same_state_target(self) -> None:
+    @aioresponses()
+    async def test_series_checks_no_update_same_state_target(self, m) -> None:
         """
         Test that we don't update checks if the state and target_url have not changed.
         """
@@ -398,7 +446,7 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -406,18 +454,29 @@ class TestSeries(PatchworkTestCase):
                         "target_url": TARGET_URL,
                     },
                 ],
-                # Patch without existing context
-                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                # Patches without existing context
+                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        series = self._pw.get_series_by_id(665)
-        series.set_check(context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL)
-        # First patch is not updates
-        self.assertEqual(self._pw_post_patcher.call_count, len(series.patches) - 1)
+        init_pw_responses(m, contexts_responses)
 
-    def test_series_checks_update_same_state_diff_target(self) -> None:
+        post_pattern = re.compile(r"^.*$")
+        m.post(post_pattern, status=200, repeat=True)
+
+        series = await self._pw.get_series_by_id(665)
+        await series.set_check(
+            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+        )
+        # First patch is not updates
+        self.assertEqual(
+            len([x for x in m.requests.keys() if x[0] == "POST"]),
+            len(series.patches) - 1,
+        )
+
+    @aioresponses()
+    async def test_series_checks_update_same_state_diff_target(self, m) -> None:
         """
         Test that we update checks if the state is the same, but target_url has changed.
         """
@@ -426,7 +485,7 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -435,18 +494,28 @@ class TestSeries(PatchworkTestCase):
                         "target_url": TARGET_URL + "something",
                     },
                 ],
-                # Patch without existing context
-                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                # Patches without existing context
+                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        series = self._pw.get_series_by_id(665)
-        series.set_check(context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL)
-        # First patch is not updates
-        self.assertEqual(self._pw_post_patcher.call_count, len(series.patches))
+        init_pw_responses(m, contexts_responses)
 
-    def test_series_checks_update_diff_state_same_target(self) -> None:
+        post_pattern = re.compile(r"^.*$")
+        m.post(post_pattern, status=200, repeat=True)
+
+        series = await self._pw.get_series_by_id(665)
+        await series.set_check(
+            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+        )
+        # First patch is not updates
+        self.assertEqual(
+            len([x for x in m.requests.keys() if x[0] == "POST"]), len(series.patches)
+        )
+
+    @aioresponses()
+    async def test_series_checks_update_diff_state_same_target(self, m) -> None:
         """
         Test that we update checks if the state is not the same, but target_url is.
         """
@@ -455,7 +524,7 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -466,21 +535,29 @@ class TestSeries(PatchworkTestCase):
                         "context": "other context",
                     },
                 ],
-                # Patch without existing context
-                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                # Patches without existing context
+                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        series = self._pw.get_series_by_id(665)
+        init_pw_responses(m, contexts_responses)
+
+        post_pattern = re.compile(r"^.*$")
+        m.post(post_pattern, status=200, repeat=True)
+
+        series = await self._pw.get_series_by_id(665)
         # success is a conclusive (non-pending) state.
-        series.set_check(
+        await series.set_check(
             context=DEFAULT_CHECK_CTX, state="success", target_url=TARGET_URL
         )
         # First patch is not updates
-        self.assertEqual(self._pw_post_patcher.call_count, len(series.patches))
+        self.assertEqual(
+            len([x for x in m.requests.keys() if x[0] == "POST"]), len(series.patches)
+        )
 
-    def test_series_checks_no_update_diff_pending_state(self) -> None:
+    @aioresponses()
+    async def test_series_checks_no_update_diff_pending_state(self, m) -> None:
         """
         Test that we do not update checks if the new state is pending and we have an existing final state.
         """
@@ -489,7 +566,7 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -498,55 +575,72 @@ class TestSeries(PatchworkTestCase):
                         "target_url": TARGET_URL,
                     },
                 ],
-                # Patch without existing context
-                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                # Patches without existing context
+                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
-        self._pw_get_patcher.side_effect = pw_response_generator(contexts_responses)
-        series = self._pw.get_series_by_id(665)
-        series.set_check(context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL)
+        init_pw_responses(m, contexts_responses)
+
+        post_pattern = re.compile(r"^.*$")
+        m.post(post_pattern, status=200, repeat=True)
+
+        series = await self._pw.get_series_by_id(665)
+        await series.set_check(
+            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+        )
         # First patch is not updates
-        self.assertEqual(self._pw_post_patcher.call_count, len(series.patches) - 1)
+        self.assertEqual(
+            len([x for x in m.requests.keys() if x[0] == "POST"]),
+            len(series.patches) - 1,
+        )
 
 
 class TestSubject(PatchworkTestCase):
     @freeze_time(DEFAULT_FREEZE_DATE)
-    def test_relevant_series(self) -> None:
+    @aioresponses()
+    async def test_relevant_series(self, m) -> None:
         """
         Test that we find the relevant series for a given subject.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         s = Subject("foo", self._pw)
         # There is 2 relevant series
-        self.assertEqual(len(s.relevant_series), 4)
+        self.assertEqual(len(await s.relevant_series), 4)
+
         # Series are ordered from oldest to newest
-        series = s.relevant_series[0]
+        series = (await s.relevant_series)[0]
         self.assertEqual(series.id, FOO_SERIES_FIRST)
         # It has only 1 diff, diff 11
-        self.assertEqual(len(series.get_patches()), 1)
-        self.assertEqual([patch["id"] for patch in series.get_patches()], [11])
+        self.assertEqual(len(await series.get_patches()), 1)
+        self.assertEqual([patch["id"] for patch in await series.get_patches()], [11])
 
     @freeze_time(DEFAULT_FREEZE_DATE)
-    def test_latest_series(self) -> None:
+    @aioresponses()
+    async def test_latest_series(self, m) -> None:
         """
         Test that latest_series only returns.... the latest serie.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         s = Subject("foo", self._pw)
-        latest_series = none_throws(s.latest_series)
+        latest_series = none_throws(await s.latest_series)
         # It is Series with ID FOO_SERIES_LAST
         self.assertEqual(latest_series.id, FOO_SERIES_LAST)
         # and has 3 diffs
-        self.assertEqual(len(latest_series.get_patches()), 3)
+        self.assertEqual(len(await latest_series.get_patches()), 3)
 
     @freeze_time(DEFAULT_FREEZE_DATE)
-    def test_branch_name(self) -> None:
+    @aioresponses()
+    async def test_branch_name(self, m) -> None:
         """
         Test that the branch name is made using the first series ID in the list of relevant series.
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         s = Subject("foo", self._pw)
-        branch = s.branch
+        branch = await s.branch
         # It is Series with ID 4
         self.assertEqual(branch, f"series/{FOO_SERIES_FIRST}")

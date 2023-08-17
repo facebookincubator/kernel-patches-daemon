@@ -393,7 +393,7 @@ class BranchWorker(GithubConnector):
     def _close_pr(self, pr: PullRequest) -> None:
         pr.edit(state="closed")
 
-    def _guess_pr(
+    async def _guess_pr(
         self, series: Series, branch: Optional[str] = None
     ) -> Optional[PullRequest]:
         """
@@ -411,7 +411,7 @@ class BranchWorker(GithubConnector):
         if not branch:
             # resolve branch: series -> subject -> branch
             subject = Subject(series.subject, self.patchwork)
-            branch = self.subject_to_branch(subject)
+            branch = await self.subject_to_branch(subject)
 
         try:
             # we assuming only one PR can be active for one head->base
@@ -423,7 +423,7 @@ class BranchWorker(GithubConnector):
         # is:pr is:closed head:"series/358111=>bpf"
         return self.filter_closed_pr(branch)
 
-    def _comment_series_pr(
+    async def _comment_series_pr(
         self,
         series: Series,
         branch_name: str,
@@ -436,13 +436,14 @@ class BranchWorker(GithubConnector):
         Appends comment to a PR.
         """
         title = f"{series.subject}"
-        pr_tags = copy.copy(series.visible_tags())
+        tags = await series.visible_tags()
+        pr_tags = copy.copy(tags)
         pr_tags.add(self.repo_branch)
 
         if has_merge_conflict:
             pr_tags.add(MERGE_CONFLICT_LABEL)
 
-        pr = self._guess_pr(series, branch=branch_name)
+        pr = await self._guess_pr(series, branch=branch_name)
 
         if pr and pr.state == "closed":
             if can_create:
@@ -508,20 +509,20 @@ class BranchWorker(GithubConnector):
 
             if close:
                 pr_closed.add(1)
-                if series.is_expired():
+                if await series.is_expired():
                     pr_closed.add(1, {"reason": "expired"})
                 logger.warning(f"Closing PR {pr.number}: {pr.head.ref}")
                 self._close_pr(pr)
         return pr
 
-    def _pr_closed(self, branch_name: str, series: Series) -> bool:
-        if series.is_closed():
+    async def _pr_closed(self, branch_name: str, series: Series) -> bool:
+        if await series.is_closed():
             warn_msg = f"At least one diff in series {series.web_url} irrelevant now. Closing PR."
-        elif series.is_expired():
+        elif await series.is_expired():
             warn_msg = (
                 f"At least one diff in series {series.web_url} expired. Closing PR."
             )
-        elif not series.has_matching_patches():
+        elif not await series.has_matching_patches():
             warn_msg = (
                 f"At least one diff in series {series.web_url} irrelevant now "
                 f"for {self.patchwork.search_patterns} search patterns"
@@ -530,13 +531,13 @@ class BranchWorker(GithubConnector):
             return False
 
         logger.warning(warn_msg)
-        self._comment_series_pr(
+        await self._comment_series_pr(
             series, message=warn_msg, close=True, branch_name=branch_name
         )
 
         # delete branch if there is no more PRs left from this branch
         prs = self.all_prs.get(branch_name, [])
-        if series.is_closed() and len(prs) == 1 and branch_name in self.branches:
+        if await series.is_closed() and len(prs) == 1 and branch_name in self.branches:
             self.delete_branch(branch_name)
 
         return True
@@ -558,7 +559,7 @@ class BranchWorker(GithubConnector):
         self.repo_local.git.add("--all", "--force")
         self.repo_local.git.commit("--all", "--message", "adding ci files")
 
-    def try_apply_mailbox_series(
+    async def try_apply_mailbox_series(
         self, branch_name: str, series: Series
     ) -> Tuple[bool, Optional[Exception], Optional[Any]]:
         """Try to apply a mailbox series and return (True, None, None) if successful"""
@@ -568,7 +569,7 @@ class BranchWorker(GithubConnector):
         self.repo_local.git.checkout("-B", branch_name)
 
         # Apply series
-        patch_content = series.get_patch_binary_content()
+        patch_content = await series.get_patch_binary_content()
         with temporary_patch_file(patch_content) as tmp_patch_file:
             try:
                 self.repo_local.git.am("--3way", istream=tmp_patch_file)
@@ -580,14 +581,14 @@ class BranchWorker(GithubConnector):
                 return (False, e, conflict)
         return (True, None, None)
 
-    def apply_push_comment(
+    async def apply_push_comment(
         self, branch_name: str, series: Series
     ) -> Optional[PullRequest]:
         comment = (
             f"Upstream branch: {self.upstream_sha}\nseries: {series.web_url}\n"
             f"version: {series.version}\n"
         )
-        success, e, conflict = self.try_apply_mailbox_series(branch_name, series)
+        success, e, conflict = await self.try_apply_mailbox_series(branch_name, series)
         if not success:
             comment = (
                 f"{comment}\nPull request is *NOT* updated. Failed to apply {series.web_url}\n"
@@ -596,7 +597,7 @@ class BranchWorker(GithubConnector):
             )
             logger.warning(f"Failed to apply {series.url}")
             pr_merge_conflict.add(1)
-            return self._comment_series_pr(
+            return await self._comment_series_pr(
                 series,
                 message=comment,
                 branch_name=branch_name,
@@ -613,7 +614,7 @@ class BranchWorker(GithubConnector):
         ):
             # we have branch, but either NO PR or there is code changes, we must try to
             # re-open PR first, before doing force-push.
-            pr = self._comment_series_pr(
+            pr = await self._comment_series_pr(
                 series,
                 message=comment,
                 branch_name=branch_name,
@@ -627,7 +628,7 @@ class BranchWorker(GithubConnector):
                 # raise an exception so it bubbles up to the caller.
                 raise NewPRWithNoChangeException(self.repo_pr_base_branch, branch_name)
             self.repo_local.git.push("--force", "origin", branch_name)
-            return self._comment_series_pr(
+            return await self._comment_series_pr(
                 series,
                 message=comment,
                 branch_name=branch_name,
@@ -635,9 +636,9 @@ class BranchWorker(GithubConnector):
             )
         else:
             # no code changes, just update tags
-            return self._comment_series_pr(series, branch_name=branch_name)
+            return await self._comment_series_pr(series, branch_name=branch_name)
 
-    def checkout_and_patch(
+    async def checkout_and_patch(
         self, branch_name: str, series_to_apply: Series
     ) -> Optional[PullRequest]:
         """
@@ -646,9 +647,9 @@ class BranchWorker(GithubConnector):
         Return None if at least one patch in series failed.
         If at least one patch in series failed nothing gets pushed.
         """
-        if self._pr_closed(branch_name, series_to_apply):
+        if await self._pr_closed(branch_name, series_to_apply):
             return None
-        return self.apply_push_comment(branch_name, series_to_apply)
+        return await self.apply_push_comment(branch_name, series_to_apply)
 
     def add_pr(self, pr: PullRequest) -> None:
         self.all_prs.setdefault(pr.head.ref, {}).setdefault(pr.base.ref, [])
@@ -707,19 +708,20 @@ class BranchWorker(GithubConnector):
                 res = pr
         return res
 
-    def subject_to_branch(self, subject: Subject) -> str:
-        return f"{subject.branch}{HEAD_BASE_SEPARATOR}{self.repo_branch}"
+    async def subject_to_branch(self, subject: Subject) -> str:
+        return f"{await subject.branch}{HEAD_BASE_SEPARATOR}{self.repo_branch}"
 
-    def sync_checks(self, pr: PullRequest, series: Series) -> None:
+    async def sync_checks(self, pr: PullRequest, series: Series) -> None:
         # if it's merge conflict - report failure
         ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
         if self._is_pr_flagged(pr):
-            series.set_check(
+            await series.set_check(
                 state="failure",
                 target_url=pr.html_url,
                 context=f"{ctx}-PR",
                 description=MERGE_CONFLICT_LABEL,
             )
+
             return None
 
         logger.info(f"Fetching check suites for {pr.number}: {pr.head.ref}")
@@ -753,11 +755,11 @@ class BranchWorker(GithubConnector):
         logger.info(
             f"Check suite status: overall: '{conclusion}', vmtests: '{vmtests_log}"
         )
-        self.submit_pr_summary(
+        await self.submit_pr_summary(
             series=series, state=conclusion, context_name=ctx, target_url=pr.html_url
         )
         for idx, vmtest in enumerate(vmtests, start=1):
-            series.set_check(
+            await series.set_check(
                 state=vmtest.conclusion,
                 target_url=vmtest.details_url,
                 context=f"{ctx}-{CI_VMTEST_NAME}-{idx}",
@@ -802,11 +804,11 @@ class BranchWorker(GithubConnector):
 
                 self._close_pr(pr)
 
-    def submit_pr_summary(
+    async def submit_pr_summary(
         self, series: Series, state: str, context_name: str, target_url: str
     ) -> None:
         logger.info(f"Submiting PR summary for series {series.id}")
-        series.set_check(
+        await series.set_check(
             state=state,
             target_url=target_url,
             context=f"{context_name}-PR",
