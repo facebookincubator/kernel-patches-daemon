@@ -4,6 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+import asyncio
 import copy
 import hashlib
 import logging
@@ -755,16 +756,23 @@ class BranchWorker(GithubConnector):
         logger.info(
             f"Check suite status: overall: '{conclusion}', vmtests: '{vmtests_log}"
         )
-        await self.submit_pr_summary(
-            series=series, state=conclusion, context_name=ctx, target_url=pr.html_url
-        )
-        for idx, vmtest in enumerate(vmtests, start=1):
-            await series.set_check(
+        tasks = [
+            self.submit_pr_summary(
+                series=series,
+                state=conclusion,
+                context_name=ctx,
+                target_url=pr.html_url,
+            )
+        ] + [
+            series.set_check(
                 state=vmtest.conclusion,
                 target_url=vmtest.details_url,
                 context=f"{ctx}-{CI_VMTEST_NAME}-{idx}",
                 description=f"Logs for {vmtest.name}",
             )
+            for idx, vmtest in enumerate(vmtests)
+        ]
+        await asyncio.gather(*tasks)
 
     def expire_branches(self) -> None:
         for branch in self.branches:
