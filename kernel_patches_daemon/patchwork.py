@@ -4,20 +4,26 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+import asyncio
 import datetime
 import json
 import logging
 import re
-from typing import Any, AnyStr, Callable, Dict, Final, List, Optional, Sequence, Set
+from functools import update_wrapper
+from types import SimpleNamespace
+from typing import Any, AnyStr, Dict, Final, List, Optional, Sequence, Set
 from urllib.parse import urljoin
 
+import aiohttp
+import cachetools.keys
+
 import dateutil.parser as dateparser
-import requests
-from cachetools import cached, TTLCache
+from aiohttp_retry import ExponentialRetry, RetryClient
+from cachetools import TTLCache
+from multidict import MultiDict
 
 from opentelemetry import metrics
 from pyre_extensions import none_throws
-from requests.adapters import HTTPAdapter
 
 # when we want to push this patch through CI
 RELEVANT_STATES: Dict[str, int] = {
@@ -83,58 +89,110 @@ err_malformed_series: metrics.Counter = meter.create_counter(
     name="errors.malformed_series"
 )
 
+## Request Tracing
+class TraceContext(SimpleNamespace):
+    """
+    aiohttp supports tracing.
+    https://docs.aiohttp.org/en/stable/client_advanced.html#aiohttp-client-tracing
 
-def log_response(func: Callable[..., requests.Response]):
-    def log_response_content(response: requests.Response) -> None:
-        log_level = logging.DEBUG if response.ok else logging.ERROR
+    To measure the time spent on a request, we capture the start time and end time in the TraceContext class
+    by using the handlers `on_request_start` and `on_request_end` respectively.
+    """
 
-        try:
-            content = json_pprint(response.json())
-        except json.decoder.JSONDecodeError:
-            content = f"<binary content: {len(response.content)} bytes>"
-        except Exception:
-            logger.exception("Failed to handle Patchwork response")
-            return
+    start: Optional[float] = None
+    end: Optional[float] = None
 
-        logger.log(
-            log_level,
-            f"Patchwork {response.request.method} {response.request.url} "
-            f"{response.status_code}, response: {content}",
-        )
+    def elapsed(self) -> float:
+        return none_throws(self.end) - none_throws(self.start)
 
-    def log_response_metrics(response: requests.Response) -> None:
-        response_code_leading_num = response.status_code // 100
 
-        if not response.request.method:
-            logger.error("No http method founds in response, skipping metrics")
-            return
+async def log_response_content(
+    response: aiohttp.ClientResponse, trace_ctx: TraceContext
+) -> None:
+    """
+    Log the response content for debugging.
+    This will log the content of any requests which is not `ok`, e.g status code > 400:
+    https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientResponse.ok
+    Or any requests when in debugging mode.
+    """
+    log_level = logging.DEBUG if response.ok else logging.ERROR
 
-        normalized_http_method = response.request.method.strip().lower()
-        api_requests.add(
-            1,
-            {
-                "http_code": f"{response_code_leading_num}xx",
-                "http_method": normalized_http_method,
-            },
-        )
-        api_requests_time.record(
-            response.elapsed.microseconds // 1000,
-            {"http_method": normalized_http_method},
-        )
+    try:
+        content = json_pprint(await response.json())
+    except (json.decoder.JSONDecodeError, aiohttp.ContentTypeError):
+        payload = await response.read()
+        content = f"<binary content: {len(payload)} bytes>"
+    except Exception:
+        logger.exception("Failed to handle Patchwork response")
+        return
 
-    def wrapper(*args, **kwargs) -> requests.Response:
-        response = func(*args, **kwargs)
-
-        log_response_content(response)
-        log_response_metrics(response)
-
-        return response
-
-    return wrapper
+    logger.log(
+        log_level,
+        f"Patchwork {response.method} {response.url} "
+        f"{response.status}, response: {content}",
+    )
 
 
 def json_pprint(obj: Any, indent: int = 2) -> str:
+    """
+    Return a string which is suitable to pretty print a JSON object.
+    """
     return json.dumps(obj, indent=indent, sort_keys=True)
+
+
+async def log_response_metrics(
+    response: aiohttp.ClientResponse, trace_ctx: TraceContext
+) -> None:
+    """
+    Log an API response metrics.
+    HTTP methods like GET, POST and OPTIONS per ranges of status codes are counted,
+    as well as requests elapsed time per method.
+    """
+    response_code_leading_num = response.status // 100
+
+    if not response.method:
+        logger.error("No http method founds in response, skipping metrics")
+        return
+
+    normalized_http_method = response.method.strip().lower()
+    api_requests.add(
+        1,
+        {
+            "http_code": f"{response_code_leading_num}xx",
+            "http_method": normalized_http_method,
+        },
+    )
+    api_requests_time.record(
+        round(trace_ctx.elapsed() * 1000),  # Elapsed time in ms
+        {"http_method": normalized_http_method},
+    )
+
+
+async def on_request_start(
+    session: aiohttp.ClientSession,
+    trace_ctx: TraceContext,
+    params: aiohttp.TraceRequestStartParams,
+) -> None:
+    """
+    Handler called when an HTTP request starts.
+    We currently use this to capture the start time of the request.
+    """
+    trace_ctx.start = asyncio.get_event_loop().time()
+
+
+async def on_request_end(
+    session: aiohttp.ClientSession,
+    trace_ctx: TraceContext,
+    params: aiohttp.TraceRequestEndParams,
+) -> None:
+    """
+    Handler called when an HTTP request finishes.
+    We currently use this to capture the end time of the request and subsequently
+    log the response content and metrics.
+    """
+    trace_ctx.end = asyncio.get_event_loop().time()
+    await log_response_content(params.response, trace_ctx)
+    await log_response_metrics(params.response, trace_ctx)
 
 
 def time_since_secs(date: str) -> float:
@@ -159,32 +217,86 @@ def parse_tags(input: str) -> Set[str]:
     return filtered_tags
 
 
+# An asyncio compatible cachetools.cached method.
+# https://github.com/tkem/cachetools/issues/137
+# We may want to use asyncache, aiocache or the likes.
+def cached(cache, key=cachetools.keys.hashkey, lock=None):
+    """
+    Decorator to wrap an async function with a memoizing callable that saves results in a cache.
+    """
+
+    def decorator(func):
+        if cache is None:
+
+            async def wrapper(*args, **kwargs):
+                return await func(*args, **kwargs)
+
+        elif lock is None:
+
+            async def wrapper(*args, **kwargs):
+                k = key(*args, **kwargs)
+                try:
+                    return cache[k]
+                except KeyError:
+                    pass  # key not found
+                v = await func(*args, **kwargs)
+                try:
+                    cache[k] = v
+                except ValueError:
+                    pass  # value too large
+                return v
+
+        else:
+
+            async def wrapper(*args, **kwargs):
+                k = key(*args, **kwargs)
+                try:
+                    with lock:
+                        return cache[k]
+                except KeyError:
+                    pass  # key not found
+                v = await func(*args, **kwargs)
+                try:
+                    with lock:
+                        cache[k] = v
+                except ValueError:
+                    pass  # value too large
+                return v
+
+        return update_wrapper(wrapper, func)
+
+    return decorator
+
+
 class Subject:
     def __init__(self, subject: str, pw_client: "Patchwork") -> None:
         self.pw_client = pw_client
         self.subject = subject
 
     @property
-    def branch(self) -> Optional[str]:
-        if len(self.relevant_series) == 0:
+    async def branch(self) -> Optional[str]:
+        relevant_series = await self.relevant_series
+        if len(relevant_series) == 0:
             return None
-        return f"series/{self.relevant_series[0].id}"
+        return f"series/{relevant_series[0].id}"
 
     @property
-    def latest_series(self) -> Optional["Series"]:
-        if len(self.relevant_series) == 0:
+    async def latest_series(self) -> Optional["Series"]:
+        relevant_series = await self.relevant_series
+        if len(relevant_series) == 0:
             return None
-        return self.relevant_series[-1]
+        return relevant_series[-1]
 
     @property
     @cached(cache=TTLCache(maxsize=1, ttl=600))
-    def relevant_series(self) -> List["Series"]:
+    async def relevant_series(self) -> List["Series"]:
         """
         cache and return sorted list of relevant series
         where first element is first known version of same subject
         and last is the most recent
         """
-        series_list = self.pw_client.get_series(params={"q": self.subject})
+        series_list = await self.pw_client.get_series(params={"q": self.subject})
+
         logging.debug(
             f"All series for '{self.subject}' subject: {json_pprint([s.to_json() for s in series_list])}"
         )
@@ -193,7 +305,7 @@ class Subject:
         relevant_series = [
             series
             for series in series_list
-            if series.subject == self.subject and series.has_matching_patches()
+            if series.subject == self.subject and await series.has_matching_patches()
         ]
         # sort series by age desc,  so last series is the most recent one
         sorted_series = sorted(relevant_series, key=lambda x: x.age(), reverse=True)
@@ -266,32 +378,34 @@ class Series:
         return time_since_secs(self.date)
 
     @cached(cache=TTLCache(maxsize=1, ttl=600))
-    def get_patches(self) -> List[Dict]:
+    async def get_patches(self) -> List[Dict]:
         """
         Returns patches preserving original order
         for the most recent relevant series
         """
-        return [self.pw_client.get_patch_by_id(patch["id"]) for patch in self.patches]
+        return [
+            await self.pw_client.get_patch_by_id(patch["id"]) for patch in self.patches
+        ]
 
-    def is_closed(self) -> bool:
+    async def is_closed(self) -> bool:
         """
         Series considered closed if at least one patch in this series
         is in irrelevant states
         """
-        for patch in self.get_patches():
+        for patch in await self.get_patches():
             if patch["state"] in IRRELEVANT_STATES:
                 return True
         return False
 
     @cached(cache=TTLCache(maxsize=1, ttl=120))
-    def all_tags(self) -> Set[str]:
+    async def all_tags(self) -> Set[str]:
         """
         Tags fetched from series name, diffs and cover letter
         for most relevant series
         """
         tags = {f"V{self.version}"}
 
-        for patch in self.get_patches():
+        for patch in await self.get_patches():
             tags |= parse_tags(patch["name"])
             tags.add(patch["state"])
 
@@ -302,34 +416,38 @@ class Series:
 
         return tags
 
-    def visible_tags(self) -> Set[str]:
-        return {f"V{self.version}", *[diff["state"] for diff in self.get_patches()]}
+    async def visible_tags(self) -> Set[str]:
+        return {
+            f"V{self.version}",
+            *[diff["state"] for diff in await self.get_patches()],
+        }
 
-    def is_expired(self) -> bool:
-        for diff in self.get_patches():
+    async def is_expired(self) -> bool:
+        for diff in await self.get_patches():
             if diff["state"] in TTL:
                 if time_since_secs(diff["date"]) >= TTL[diff["state"]]:
                     return True
         return False
 
     @cached(cache=TTLCache(maxsize=1, ttl=120))
-    def get_patch_binary_content(self) -> bytes:
-        content = self.pw_client.get_blob(self.mbox)
+    async def get_patch_binary_content(self) -> bytes:
+
+        content = await self.pw_client.get_blob(self.mbox)
         logger.debug(
             f"Received patch mbox for series {self.id}, size: {len(content)} bytes"
         )
         return content
 
-    def has_matching_patches(self) -> bool:
-        for patch in self.get_patches():
+    async def has_matching_patches(self) -> bool:
+        for patch in await self.get_patches():
             if self._is_patch_matching(patch):
                 return True
 
         return False
 
-    def set_check(self, **kwargs) -> None:
-        for patch in self.get_patches():
-            self.pw_client.post_check_for_patch_id(
+    async def set_check(self, **kwargs) -> None:
+        for patch in await self.get_patches():
+            await self.pw_client.post_check_for_patch_id(
                 patch_id=patch["id"], check_data=kwargs
             )
 
@@ -372,61 +490,103 @@ class Patchwork:
         # member variable initializations
         self.known_series: Dict[int, Series] = {}
         self.known_subjects: Dict[str, Subject] = {}
-        self.http_session = requests.Session()
-        adapter = HTTPAdapter(max_retries=http_retries)
 
-        self.http_session.mount("http://", adapter)
-        self.http_session.mount("https://", adapter)
+        # aiohttp's ClientSession needs to be initialized within an async function.
+        # We will differ this initialization to a separate function and memoize it during first call.
+        self.http_retries = http_retries
+        self.http_session = None
+
+    async def get_http_session(self) -> aiohttp.ClientSession:
+        """
+        Return a cached http session and initialize it if it doesn't exist.
+        """
+        if self.http_session is None:
+            # Setup aiohttp client tracing so we can log metrics/requests
+            # https://docs.aiohttp.org/en/stable/client_advanced.html#aiohttp-client-tracing
+            trace_config = aiohttp.TraceConfig(trace_config_ctx_factory=TraceContext)
+            # pyre-fixme[6]: In call `typing.MutableSequence.append`, for 1st positional argument, expected `_SignalCallback[TraceRequestStartParams]` but got `typing.Callable(on_request_start)[[Named(session, ClientSession), Named(trace_ctx, TraceContext), Named(params, TraceRequestStartParams)], Coroutine[typing.Any, typing.Any, None]]`.
+            trace_config.on_request_start.append(on_request_start)
+            # pyre-fixme[6]: In call `typing.MutableSequence.append`, for 1st positional argument, expected `_SignalCallback[TraceRequestEndParams]` but got `typing.Callable(on_request_end)[[Named(session, ClientSession), Named(trace_ctx, TraceContext), Named(params, TraceRequestEndParams)], Coroutine[typing.Any, typing.Any, None]]`.
+            trace_config.on_request_end.append(on_request_end)
+            client_session = aiohttp.ClientSession(
+                trace_configs=[trace_config],
+                # Read proxy from env var
+                trust_env=True,
+            )
+
+            # Work around intermittent issues by adding some retry logic.
+            retry_options = ExponentialRetry(attempts=self.http_retries)
+            self.http_session = RetryClient(
+                client_session=client_session, retry_options=retry_options
+            )
+        return self.http_session
 
     def format_since(self, pw_lookback: int) -> str:
         today = datetime.datetime.utcnow().date()
         lookback = today - datetime.timedelta(days=pw_lookback)
         return lookback.strftime("%Y-%m-%dT%H:%M:%S")
 
-    @log_response
-    def __get(self, path: AnyStr, **kwargs: Dict) -> requests.Response:
-        # pyre-ignore
-        return self.http_session.get(url=urljoin(self.api_url, path), **kwargs)
+    async def __get(
+        self, path: AnyStr, allow_redirects=True, **kwargs: Dict
+    ) -> aiohttp.ClientResponse:
+        http_session = await self.get_http_session()
+        resp = await http_session.get(
+            # pyre-ignore
+            urljoin(self.api_url, path),
+            # pyre-ignore
+            **kwargs,
+        )
+        return resp
 
-    def __get_object_by_id(self, object_type: str, object_id: int) -> Dict:
-        return self.__get(f"{object_type}/{object_id}/").json()
+    async def __get_object_by_id(self, object_type: str, object_id: int) -> Dict:
+        resp = await self.__get(f"{object_type}/{object_id}/")
+        return await resp.json()
 
-    def __get_objects_recursive(
+    async def __get_objects_recursive(
         self, object_type: str, params: Optional[Dict] = None
     ) -> List[Dict]:
         items = []
         path = f"{object_type}/"
+        if params is None:
+            params = {}
         while True:
-            response = self.__get(path, params=params)
-            items += response.json()
+            response = await self.__get(path, params=params)
+            items += await response.json()
 
             if "next" not in response.links:
                 break
 
-            path = response.links["next"]["url"]
+            # FIXME: the returned URL is a yarl.URL that contains the full hostname, path, query parameters.
+            # Here all a sudden, path is changed from a "relative path" to the full URL. Luckily, urljoin, which we use
+            # in `__get` deal with this and compute the right URL.
+            path = str(response.links["next"]["url"])
         return items
 
-    @log_response
-    def __post(self, path: AnyStr, data: Dict) -> requests.Response:
-        return self.http_session.post(
+    async def __post(self, path: AnyStr, data: Dict) -> aiohttp.ClientResponse:
+        http_session = await self.get_http_session()
+        resp = await http_session.post(
             # pyre-ignore
-            url=urljoin(self.api_url, path),
+            urljoin(self.api_url, path),
             headers={"Authorization": f"Token {self.auth_token}"},
             data=data,
         )
+        return resp
 
-    def __try_post(self, path: AnyStr, data: Dict) -> Optional[requests.Response]:
+    async def __try_post(
+        self, path: AnyStr, data: Dict
+    ) -> Optional[aiohttp.ClientResponse]:
         if not self.auth_token:
             logger.warning(f"Patchwork POST {path}: read-only mode, request ignored")
             logger.debug(f"Patchwork POST data: {json_pprint(data)}")
             return None
 
-        return self.__post(path, data)
+        return await self.__post(path, data)
 
-    def get_blob(self, url: AnyStr) -> bytes:
-        return self.__get(url, allow_redirects=True).content
+    async def get_blob(self, url: AnyStr) -> bytes:
+        resp = await self.__get(url, allow_redirects=True)
+        return await resp.read()
 
-    def get_latest_check_for_patch(
+    async def get_latest_check_for_patch(
         self,
         patch_id: int,
         context: str,
@@ -437,14 +597,15 @@ class Patchwork:
         """
         # get single latest one with matching context value
         # patchwork.kernel.org api ignores case for context query
-        checks = self.__get(
+        resp = await self.__get(
             f"patches/{patch_id}/checks/",
             params={
                 "context": context,
                 "order": "-date",
                 "per_page": "1",
             },
-        ).json()
+        )
+        checks = await resp.json()
         logger.debug(
             f"Received latest check for patch {patch_id} with context {context}: {json_pprint(checks)}"
         )
@@ -456,9 +617,9 @@ class Patchwork:
 
         return checks[0]
 
-    def post_check_for_patch_id(
+    async def post_check_for_patch_id(
         self, patch_id: int, check_data: Dict[str, Any]
-    ) -> Optional[requests.Response]:
+    ) -> Optional[aiohttp.ClientResponse]:
         new_state = PW_CHECK_STATES.get(check_data["state"], PW_CHECK_STATES[None])
         updated_check_data = {
             **check_data,
@@ -468,7 +629,9 @@ class Patchwork:
             f"Trying to update check for {patch_id} with a new content: {json_pprint(updated_check_data)}"
         )
         try:
-            check = self.get_latest_check_for_patch(patch_id, check_data["context"])
+            check = await self.get_latest_check_for_patch(
+                patch_id, check_data["context"]
+            )
             if (
                 check_data["state"] in PW_CHECK_PENDING_STATES
                 and PW_CHECK_PENDING_STATES[check_data["state"]] != check["state"]
@@ -495,16 +658,16 @@ class Patchwork:
         except ValueError:
             logger.info(f"Setting patch {patch_id} check to '{new_state}' state")
 
-        return self.__try_post(
+        return await self.__try_post(
             f"patches/{patch_id}/checks/",
             data=updated_check_data,
         )
 
-    def get_series_by_id(self, series_id: int) -> Series:
+    async def get_series_by_id(self, series_id: int) -> Series:
         # fetches directly only if series is not available in local scope
         if series_id not in self.known_series:
             self.known_series[series_id] = Series(
-                self, self.__get_object_by_id("series", series_id)
+                self, await self.__get_object_by_id("series", series_id)
             )
 
         return self.known_series[series_id]
@@ -517,23 +680,27 @@ class Patchwork:
 
         return self.known_subjects[series.subject]
 
-    def get_relevant_subjects(self) -> Sequence[Subject]:
+    async def get_relevant_subjects(self) -> Sequence[Subject]:
         subjects = {}
         filtered_subjects = []
         self.known_series = {}
         self.known_subjects = {}
 
         for pattern in self.search_patterns:
-            patch_filters = {
-                "since": self.since,
-                "state": RELEVANT_STATES.values(),
-                "archived": False,
-            }
-            patch_filters.update(pattern)
+            patch_filters = MultiDict(
+                [
+                    ("since", self.since),
+                    ("archived", str(False)),
+                    *[("state", val) for val in RELEVANT_STATES.values()],
+                ]
+            )
+            patch_filters.update({k: str(v) for k, v in pattern.items()})
             logger.info(
                 f"Searching for Patchwork patches that match the criteria: {patch_filters}"
             )
-            all_patches = self.__get_objects_recursive("patches", params=patch_filters)
+            all_patches = await self.__get_objects_recursive(
+                "patches", params=patch_filters
+            )
             for patch in all_patches:
                 patch_series = patch["series"]
                 for series_data in patch_series:
@@ -552,17 +719,17 @@ class Patchwork:
 
             logger.info(f"Total subjects found: {len(subjects)}")
             for subject_name, subject_obj in subjects.items():
-                latest_series = subject_obj.latest_series
+                latest_series = await subject_obj.latest_series
                 if not latest_series:
                     logger.error(f"Subject '{subject_name}' doesn't have any series")
                     continue
 
-                if latest_series.is_expired():
+                if await latest_series.is_expired():
                     logger.info(
                         f"Subjects '{subject_name}' series {latest_series.id} is expired",
                     )
                     continue
-                if latest_series.is_closed():
+                if await latest_series.is_closed():
                     logger.info(
                         f"Subjects '{subject_name}' series {latest_series.id} is closed",
                     )
@@ -578,11 +745,11 @@ class Patchwork:
         logger.info(f"Total relevant subjects found: {len(filtered_subjects)}")
         return filtered_subjects
 
-    def get_patch_by_id(self, id: int) -> Dict:
-        return self.__get_object_by_id("patches", id)
+    async def get_patch_by_id(self, id: int) -> Dict:
+        return await self.__get_object_by_id("patches", id)
 
-    def get_series(self, params: Optional[Dict]) -> List[Series]:
+    async def get_series(self, params: Optional[Dict]) -> List[Series]:
         return [
             Series(self, json)
-            for json in self.__get_objects_recursive("series", params=params)
+            for json in await self.__get_objects_recursive("series", params=params)
         ]

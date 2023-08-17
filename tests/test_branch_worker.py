@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List
 from unittest.mock import MagicMock, patch
 
-import requests
+from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from git.exc import GitCommandError
@@ -31,7 +31,7 @@ from munch import Munch, munchify
 from tests.common.patchwork_mock import (
     DEFAULT_TEST_RESPONSES,
     get_default_pw_client,
-    pw_response_generator,
+    init_pw_responses,
 )
 
 
@@ -105,7 +105,7 @@ def get_default_bw_client() -> BranchWorkerMock:
     return BranchWorkerMock()
 
 
-class TestBranchWorker(unittest.TestCase):
+class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         patcher = patch("kernel_patches_daemon.github_connector.Github")
         self._gh_mock = patcher.start()
@@ -117,10 +117,9 @@ class TestBranchWorker(unittest.TestCase):
 
         self._bw = BranchWorkerMock()
 
+    async def asyncSetUp(self) -> None:
         # Patchwork client
         self._pw = get_default_pw_client()
-        self._pw_post_patcher = patch.object(requests.Session, "post").start()
-        self._pw_get_patcher = patch.object(requests.Session, "get").start()
 
     def test_fetch_repo_branch(self) -> None:
         """
@@ -586,15 +585,18 @@ class TestBranchWorker(unittest.TestCase):
             ggr.assert_called_once_with(f"heads/{branch_deleted}")
             ggr.return_value.delete.assert_called_once()
 
-    def test_guess_pr_return_from_active_pr_cache(self) -> None:
+    @aioresponses()
+    async def test_guess_pr_return_from_active_pr_cache(self, m) -> None:
         # Whatever is in our self.prs's cache dictionary will be returned.
         series = Series(self._pw, SERIES_DATA)
         sentinel = random.random()
         self._bw.prs["foo"] = sentinel
-        pr = self._bw._guess_pr(series)
+        pr = await self._bw._guess_pr(series)
         self.assertEqual(sentinel, pr)
 
-    def test_guess_pr_return_from_secondary_cache_with_specified_branch(self) -> None:
+    async def test_guess_pr_return_from_secondary_cache_with_specified_branch(
+        self,
+    ) -> None:
         # After self.prs, we will look into self.all_prs
         # When calling _guess_pr with a branch name, we will look for it in
         # self.all_prs without trying to resolve the actual branch name based
@@ -604,103 +606,115 @@ class TestBranchWorker(unittest.TestCase):
         sentinel = random.random()
         self._bw.all_prs[mybranch] = {}
         self._bw.all_prs[mybranch][TEST_REPO_BRANCH] = [sentinel]
-        pr = self._bw._guess_pr(series, mybranch)
+        pr = await self._bw._guess_pr(series, mybranch)
         self.assertEqual(sentinel, pr)
 
-    def test_guess_pr_return_from_secondary_cache_without_specified_branch(
-        self,
+    @aioresponses()
+    async def test_guess_pr_return_from_secondary_cache_without_specified_branch(
+        self, m
     ) -> None:
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
         # After self.prs, we will look into self.all_prs
         # When calling _guess_pr without a branch name, we will resolve it and
         # then look in self.all_prs.
         series = Series(self._pw, SERIES_DATA)
-        mybranch = self._bw.subject_to_branch(Subject(series.subject, self._pw))
+        mybranch = await self._bw.subject_to_branch(Subject(series.subject, self._pw))
 
         sentinel = random.random()
         self._bw.all_prs[mybranch] = {}
         self._bw.all_prs[mybranch][TEST_REPO_BRANCH] = [sentinel]
-        pr = self._bw._guess_pr(series, mybranch)
+        pr = await self._bw._guess_pr(series, mybranch)
         self.assertEqual(sentinel, pr)
 
-    def test_guess_pr_not_in_cache_no_specified_branch_no_remote_branch(self) -> None:
+    @aioresponses()
+    async def test_guess_pr_not_in_cache_no_specified_branch_no_remote_branch(
+        self, m
+    ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
         and for which we do not have an active remote branch (self.branches)
-        Repro for T1473514152
+        Repro for T147351415
         """
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
         # Replace our BranchWorker PW instance by the mocked one.
         self._bw.patchwork = self._pw
         # Replace our BranchWorker repo instance by our gh_mock
         self._bw.repo = self._gh_mock
 
         series = Series(self._pw, {**SERIES_DATA, "name": "foo"})
-        mybranch = self._bw.subject_to_branch(Subject(series.subject, self._pw))
-        pr = self._bw._guess_pr(series, mybranch)
+        mybranch = await self._bw.subject_to_branch(Subject(series.subject, self._pw))
+        pr = await self._bw._guess_pr(series, mybranch)
 
         # branch is not an active remote branch, we look up for existing PRs
         # and do not find any.
         self.assertTrue(self._gh_mock.method_calls)
         self.assertIsNone(pr)
 
-    def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v1(
-        self,
+    @aioresponses()
+    async def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v1(
+        self, m
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
         and for which we do not have an active remote branch (self.branches).
         V1 series.
-        Repro for T1473514152
+        Repro for T147351415
         """
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
         # Replace our BranchWorker PW instance by the mocked one.
         self._bw.patchwork = self._pw
         # Replace our BranchWorker repo instance by our gh_mock
         self._bw.repo = self._gh_mock
 
         series = Series(self._pw, {**SERIES_DATA, "version": 1})
-        mybranch = self._bw.subject_to_branch(Subject(series.subject, self._pw))
+        mybranch = await self._bw.subject_to_branch(Subject(series.subject, self._pw))
         self._bw.branches = "aaa"
-        pr = self._bw._guess_pr(series, mybranch)
+        pr = await self._bw._guess_pr(series, mybranch)
 
         # branch is an active remote branch, our series version is v1. We look up closed
         # PRs regardless but don't find any.
         self.assertTrue(self._gh_mock.method_calls)
         self.assertIsNone(pr)
 
-    def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v2_first_series(
-        self,
+    @aioresponses()
+    async def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v2_first_series(
+        self, m
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
         and for which we do not have an active remote branch (self.branches)
         V2 series.
-        Repro for T1473514152
+        Repro for T147351415
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         # Replace our BranchWorker PW instance by the mocked one.
         self._bw.patchwork = self._pw
         # Replace our BranchWorker repo instance by our gh_mock
         self._bw.repo = self._gh_mock
 
         series = Series(self._pw, {**SERIES_DATA, "name": "code", "version": 2})
-        mybranch = self._bw.subject_to_branch(Subject(series.subject, self._pw))
+        mybranch = await self._bw.subject_to_branch(Subject(series.subject, self._pw))
         self._bw.branches = [mybranch]
-        pr = self._bw._guess_pr(series, mybranch)
+        pr = await self._bw._guess_pr(series, mybranch)
 
         # branch is an active remote branch, we are on version 2, but we find only
         # one relevant series. We search for closed PRs regardless.
         self.assertTrue(self._gh_mock.method_calls)
         self.assertIsNone(pr)
 
-    def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_noclosed_pr(
-        self,
+    @aioresponses()
+    async def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_noclosed_pr(
+        self, m
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
         and for which we do not have an active remote branch (self.branches).
         We look for a closed PR but don't find any.
-        Repro for T1473514152
+        Repro for T147351415
         """
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         # Replace our BranchWorker PW instance by the mocked one.
         self._bw.patchwork = self._pw
         # Replace our BranchWorker repo instance by our gh_mock
@@ -713,24 +727,26 @@ class TestBranchWorker(unittest.TestCase):
 
         # Calling without specifying `branch` so we force looking up series in
         # pw_tests.DEFAULT_TEST_RESPONSES
-        pr = self._bw._guess_pr(series)
+        pr = await self._bw._guess_pr(series)
 
         # branch is an active remote branch, our series is on v2, we have
         # multiple relevant series so we lookup for closed PR but don't find any.
         self.assertTrue(self._gh_mock.method_calls)
         self.assertIsNone(pr)
 
-    def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_with_closed_pr(
-        self,
+    @aioresponses()
+    async def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_with_closed_pr(
+        self, m
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
         and for which we do not have an active remote branch (self.branches)
         We look for a closed PR and find one.
-        Repro for T1473514152
+        Repro for T147351415
         """
 
-        self._pw_get_patcher.side_effect = pw_response_generator(DEFAULT_TEST_RESPONSES)
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+
         # Replace our BranchWorker PW instance by the mocked one.
         self._bw.patchwork = self._pw
         # Replace our BranchWorker repo instance by our gh_mock
@@ -755,7 +771,7 @@ class TestBranchWorker(unittest.TestCase):
 
         # Calling without specifying `branch` so we force looking up series in
         # pw_tests.DEFAULT_TEST_RESPONSES
-        pr = self._bw._guess_pr(series)
+        pr = await self._bw._guess_pr(series)
 
         # branch is an active remote branch, our series is on v2, we have
         # multiple relevant series so we lookup for closed PR and find one.

@@ -18,12 +18,17 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
+aiohttp = "^3.8"
+aiohttp-retry = "^2.8"
+# aioresponses for asserts was not released as of 0.7.4
+# Tracking it in https://github.com/pnuckowski/aioresponses/issues/244
+aioresponses = { git = "https://github.com/pnuckowski/aioresponses.git", rev = "56b843319d5d0ae8a405f188e68d7ba8c7573bc8" }
+multidict = "^6.0"
 python = "^3.8"
 cachetools = "^5.3.0"
 gitpython = "^3.1.31"
 opentelemetry-api = "^1.18.0"
 pygithub = "^1.59.0"
-requests = "^2.31.0"
 pyre-extensions = "^0.0.30"
 opentelemetry-sdk = "^1.18.0"
 python-dateutil = "^2.8.2"
