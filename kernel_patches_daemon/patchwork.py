@@ -11,7 +11,7 @@ import logging
 import re
 from functools import update_wrapper
 from types import SimpleNamespace
-from typing import Any, AnyStr, Dict, Final, List, Optional, Sequence, Set
+from typing import Any, AnyStr, Dict, Final, List, Optional, Sequence, Set, Tuple
 from urllib.parse import urljoin
 
 import aiohttp
@@ -378,14 +378,13 @@ class Series:
         return time_since_secs(self.date)
 
     @cached(cache=TTLCache(maxsize=1, ttl=600))
-    async def get_patches(self) -> List[Dict]:
+    async def get_patches(self) -> Tuple[Dict]:
         """
         Returns patches preserving original order
         for the most recent relevant series
         """
-        return [
-            await self.pw_client.get_patch_by_id(patch["id"]) for patch in self.patches
-        ]
+        tasks = [self.pw_client.get_patch_by_id(patch["id"]) for patch in self.patches]
+        return await asyncio.gather(*tasks)
 
     async def is_closed(self) -> bool:
         """
@@ -446,10 +445,13 @@ class Series:
         return False
 
     async def set_check(self, **kwargs) -> None:
-        for patch in await self.get_patches():
-            await self.pw_client.post_check_for_patch_id(
+        tasks = [
+            self.pw_client.post_check_for_patch_id(
                 patch_id=patch["id"], check_data=kwargs
             )
+            for patch in self.patches
+        ]
+        await asyncio.gather(*tasks)
 
     def to_json(self) -> str:
         json_keys = {
@@ -718,8 +720,17 @@ class Patchwork:
                         self.known_subjects[series.subject] = subjects[series.subject]
 
             logger.info(f"Total subjects found: {len(subjects)}")
-            for subject_name, subject_obj in subjects.items():
-                latest_series = await subject_obj.latest_series
+
+            # async function used to fetch latest series for each subject concurrently
+            async def fetch_latest_series(
+                subject_name, subject_obj
+            ) -> Tuple[str, Series, Optional[Series]]:
+                return (subject_name, subject_obj, await subject_obj.latest_series)
+
+            tasks = [fetch_latest_series(k, v) for k, v in subjects.items()]
+            tasks = await asyncio.gather(*tasks)
+
+            for subject_name, subject_obj, latest_series in tasks:
                 if not latest_series:
                     logger.error(f"Subject '{subject_name}' doesn't have any series")
                     continue
