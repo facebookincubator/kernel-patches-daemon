@@ -15,7 +15,6 @@ from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from kernel_patches_daemon.patchwork import parse_tags, RELEVANT_STATES, Subject, TTL
-from kernel_patches_daemon.stats import STATS_KEY_BUG
 from multidict import MultiDict
 from pyre_extensions import none_throws
 
