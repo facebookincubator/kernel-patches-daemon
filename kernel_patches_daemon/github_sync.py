@@ -109,9 +109,9 @@ class GithubSync(Stats):
             }
         )
 
-    def get_mapped_branches(self, series: Series) -> List[str]:
+    async def get_mapped_branches(self, series: Series) -> List[str]:
         for tag in self.tag_to_branch_mapping:
-            if tag in series.all_tags():
+            if tag in await series.all_tags():
                 mapped_branches = self.tag_to_branch_mapping[tag]
                 logging.info(f"Tag '{tag}' mapped to branch order {mapped_branches}")
                 return mapped_branches
@@ -180,9 +180,7 @@ class GithubSync(Stats):
                 )
 
             # fetch recent subjects
-            self.subjects = await loop.run_in_executor(
-                None, self.pw.get_relevant_subjects
-            )
+            self.subjects = await self.pw.get_relevant_subjects()
 
         pw_done = time.time()
 
@@ -192,19 +190,22 @@ class GithubSync(Stats):
         # 4. Start from first branch, try to apply and generate PR,
         #    if fails continue to next branch, if no more branches, generate a merge-conflict PR
         for subject in self.subjects:
-            series = none_throws(subject.latest_series)
+            series = none_throws(await subject.latest_series)
             logging.info(
-                f"Processing {series.id}: {subject.subject} (tags: {series.all_tags()})"
+                f"Processing {series.id}: {subject.subject} (tags: {await series.all_tags()})"
             )
 
-            mapped_branches = self.get_mapped_branches(series)
+            mapped_branches = await self.get_mapped_branches(series)
             # series to apply - last known series
             last_branch = mapped_branches[-1]
             for branch in mapped_branches:
                 worker = self.workers[branch]
                 # PR branch name == sid of the first known series
-                pr_branch_name = worker.subject_to_branch(subject)
-                if not worker.try_apply_mailbox_series(pr_branch_name, series)[0]:
+                pr_branch_name = await worker.subject_to_branch(subject)
+                apply_mbox = await worker.try_apply_mailbox_series(
+                    pr_branch_name, series
+                )
+                if not apply_mbox[0]:
                     msg = f"Failed to apply series to {branch}, "
                     if branch != last_branch:
                         logging.info(msg + "moving to next.")
@@ -214,9 +215,7 @@ class GithubSync(Stats):
                 logging.info(f"Choosing branch {branch} to create/update PR.")
                 try:
                     self.increment_counter("all_known_subjects")
-                    pr = await loop.run_in_executor(
-                        None, worker.checkout_and_patch, pr_branch_name, series
-                    )
+                    pr = await worker.checkout_and_patch(pr_branch_name, series)
                 except NewPRWithNoChangeException:
                     self.increment_counter("empty_pr")
                     logger.exception("Could not create PR with no changes")
@@ -226,7 +225,7 @@ class GithubSync(Stats):
                 logging.info(
                     f"Created/updated PR {pr.number}({pr.head.ref}): {pr.url} for series {series.id}"
                 )
-                await loop.run_in_executor(None, worker.sync_checks, pr, series)
+                await worker.sync_checks(pr, series)
                 # Close out other PRs if exists
                 self.close_existing_prs_with_same_base(list(self.workers.values()), pr)
 
@@ -245,24 +244,18 @@ class GithubSync(Stats):
                         continue
 
                     series_id = int(get_base_branch_from_ref(pr.head.ref.split("/")[1]))
-                    series = self.pw.get_series_by_id(series_id)
+                    series = await self.pw.get_series_by_id(series_id)
                     subject = self.pw.get_subject_by_series(series)
                     if subject_name != subject.subject:
                         logger.warning(
                             f"Renaming PR {pr.number} from {subject_name} to {subject.subject} according to {series.id}"
                         )
                         pr.edit(title=subject.subject)
-                    branch_name = (
-                        f"{subject.branch}{HEAD_BASE_SEPARATOR}{worker.repo_branch}"
-                    )
-                    latest_series = subject.latest_series or series
+                    branch_name = f"{await subject.branch}{HEAD_BASE_SEPARATOR}{worker.repo_branch}"
+                    latest_series = await subject.latest_series or series
                     self.increment_counter("all_known_subjects")
-                    await loop.run_in_executor(
-                        None, worker.checkout_and_patch, branch_name, latest_series
-                    )
-                    await loop.run_in_executor(
-                        None, worker.sync_checks, pr, latest_series
-                    )
+                    await worker.checkout_and_patch(branch_name, latest_series)
+                    await worker.sync_checks(pr, latest_series)
 
             await loop.run_in_executor(None, worker.expire_branches)
             await loop.run_in_executor(None, worker.expire_user_prs)
