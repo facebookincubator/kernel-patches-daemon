@@ -98,6 +98,24 @@ class GithubConnector:
             # >>> pull.user
             # NamedUser(login="kernel-patches-daemon-bpf[bot]")
             self.user_login = self.github_account_name + BOT_USER_LOGIN_SUFFIX
+            # Note:
+            # It seems that for a given app, GH creates and associated user with the '[bot]' suffix.
+            # We could fetch that user to rely on IDs vs names.
+            # I have not been able to find any evidence of this in the GH docs, though, so it is unclear
+            # that it will not break down the line.
+            # >>> pr.user
+            # NamedUser(login="kernel-patches-daemon-bpf[bot]")
+            # >>> pr.user.id
+            # 128435009
+            # >>> app.id
+            # 307795
+            # >>> app.name
+            # 'kernel-patches-daemon-bpf'
+            # >>> g.get_user('kernel-patches-daemon-bpf[bot]').id
+            # 128435009
+            # >>> g.get_user('kernel-patches-daemon-bpf[bot]').name
+            # >>> g.get_user('kernel-patches-daemon-bpf[bot]').login
+            # 'kernel-patches-daemon-bpf[bot]'
 
         logging.info(
             f"Using User login {self.user_login}, Github Account name {self.github_account_name}"

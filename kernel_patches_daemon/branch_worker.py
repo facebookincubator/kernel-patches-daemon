@@ -798,12 +798,7 @@ class BranchWorker(GithubConnector):
         """
         for pr in self.repo.get_pulls(state="open"):
             # Anything not created by KPD is fair game for being closed.
-            # FIXME(T148345498) : remove the reference to "kernel-patches-bot"
-            # once the migration to GH app is over.
-            if pr.user.login not in [
-                self.user_login,
-                "kernel-patches-bot",
-            ] and _is_outdated_pr(pr):
+            if pr.user.login != self.user_login and _is_outdated_pr(pr):
                 logger.info(f"Pull request {pr} is found to be outdated")
                 self._add_pull_request_comment(
                     pr,
