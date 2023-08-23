@@ -76,6 +76,13 @@ class NewPRWithNoChangeException(Exception):
         )
 
 
+def _is_pr_flagged(pr: PullRequest) -> bool:
+    for label in pr.get_labels():
+        if MERGE_CONFLICT_LABEL == label.name:
+            return True
+    return False
+
+
 def execute_command(cmd: str) -> None:
     logger.info(cmd)
     os.system(cmd)
@@ -385,12 +392,6 @@ class BranchWorker(GithubConnector):
         self.repo_local.git.commit("--allow-empty", "--message", "Dummy commit")
         self.repo_local.git.push("--force", "origin", branch_name)
 
-    def _is_pr_flagged(self, pr: PullRequest) -> bool:
-        for label in pr.get_labels():
-            if MERGE_CONFLICT_LABEL == label.name:
-                return True
-        return False
-
     def _close_pr(self, pr: PullRequest) -> None:
         pr.edit(state="closed")
 
@@ -500,7 +501,7 @@ class BranchWorker(GithubConnector):
 
         if pr:
             if (not has_merge_conflict) or (
-                has_merge_conflict and not self._is_pr_flagged(pr)
+                has_merge_conflict and not _is_pr_flagged(pr)
             ):
                 if message:
                     self._add_pull_request_comment(pr, message)
@@ -715,7 +716,7 @@ class BranchWorker(GithubConnector):
     async def sync_checks(self, pr: PullRequest, series: Series) -> None:
         # if it's merge conflict - report failure
         ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
-        if self._is_pr_flagged(pr):
+        if _is_pr_flagged(pr):
             await series.set_check(
                 state="failure",
                 target_url=pr.html_url,
