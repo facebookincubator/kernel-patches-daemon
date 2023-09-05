@@ -439,11 +439,11 @@ class BranchWorker(GithubConnector):
         """
         title = f"{series.subject}"
         tags = await series.visible_tags()
-        pr_tags = copy.copy(tags)
-        pr_tags.add(self.repo_branch)
+        pr_labels = copy.copy(tags)
+        pr_labels.add(self.repo_branch)
 
         if has_merge_conflict:
-            pr_tags.add(MERGE_CONFLICT_LABEL)
+            pr_labels.add(MERGE_CONFLICT_LABEL)
 
         pr = await self._guess_pr(series, branch=branch_name)
 
@@ -494,7 +494,7 @@ class BranchWorker(GithubConnector):
             # if we got here we already got series
             # this potentially indicates a bug in PR <-> series mapping
             # or some weird condition
-            # this also may happen when we trying to add tags
+            # this also may happen when we trying to add labels
             errors.add(1, {"msg": "missing_pull_request"})
             logger.error(f"BUG: Unable to find PR for {title} {series.web_url}")
             return None
@@ -507,7 +507,7 @@ class BranchWorker(GithubConnector):
                     self._add_pull_request_comment(pr, message)
                     pr_updated.add(1)
 
-            pr.set_labels(*pr_tags)
+            pr.set_labels(*pr_labels)
 
             if close:
                 pr_closed.add(1)
@@ -637,7 +637,7 @@ class BranchWorker(GithubConnector):
                 can_create=True,
             )
         else:
-            # no code changes, just update tags
+            # no code changes, just update labels
             return await self._comment_series_pr(series, branch_name=branch_name)
 
     async def checkout_and_patch(
