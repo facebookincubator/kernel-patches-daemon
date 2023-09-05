@@ -12,6 +12,7 @@ from unittest.mock import mock_open, patch
 
 from kernel_patches_daemon.config import (
     BranchConfig,
+    EmailConfig,
     GithubAppAuthConfig,
     KPDConfig,
     PatchworksConfig,
@@ -45,6 +46,15 @@ class TestConfig(unittest.TestCase):
                 token="unittest_token",
                 search_patterns=[{"key": "value"}],
                 lookback=1,
+            ),
+            email=EmailConfig(
+                smtp_host="mail.example.com",
+                smtp_port=465,
+                smtp_user="bot-bpf-ci",
+                smtp_from="bot+bpf-ci@example.com",
+                smtp_to=["email1@example.com", "email2@example.com"],
+                smtp_pass="super-secret-is-king",
+                smtp_http_proxy="http://example.com:8080",
             ),
             tag_to_branch_mapping={"tag": ["branch"]},
             branches={
@@ -104,6 +114,15 @@ class TestConfig(unittest.TestCase):
                 token="unittest_token",
                 search_patterns=[{"key": "value"}],
                 lookback=1,
+            ),
+            email=EmailConfig(
+                smtp_host="mail.example.com",
+                smtp_port=465,
+                smtp_user="bot-bpf-ci",
+                smtp_from="bot+bpf-ci@example.com",
+                smtp_to=["email1@example.com", "email2@example.com"],
+                smtp_pass="super-secret-is-king",
+                smtp_http_proxy="http://example.com:8080",
             ),
             tag_to_branch_mapping={"tag": ["branch"]},
             branches={

@@ -129,6 +129,41 @@ class BranchConfig:
 
 
 @dataclass
+class EmailConfig:
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_from: str
+    smtp_pass: str
+    smtp_to: List[str]
+    smtp_http_proxy: Optional[str]
+
+    @classmethod
+    def from_json_v2(cls, json: Dict) -> "EmailConfig":
+        return cls(
+            smtp_host=json["smtp_host"],
+            smtp_port=json.get("smtp_port", 465),
+            smtp_user=json["smtp_user"],
+            smtp_from=json["smtp_from"],
+            smtp_pass=json["smtp_pass"],
+            smtp_to=json.get("smtp_to", []),
+            smtp_http_proxy=json.get("smtp_http_proxy", None),
+        )
+
+    @classmethod
+    def from_json_v3(cls, json: Dict) -> "EmailConfig":
+        return cls(
+            smtp_host=json["host"],
+            smtp_port=json.get("port", 465),
+            smtp_user=json["user"],
+            smtp_from=json["from"],
+            smtp_pass=json["pass"],
+            smtp_to=json.get("to", []),
+            smtp_http_proxy=json.get("http_proxy", None),
+        )
+
+
+@dataclass
 class PatchworksConfig:
     base_url: str
     project: str
@@ -164,6 +199,7 @@ class PatchworksConfig:
 class KPDConfig:
     version: int
     patchwork: PatchworksConfig
+    email: Optional[EmailConfig]
     branches: Dict[str, BranchConfig]
     tag_to_branch_mapping: Dict[str, List[str]]
     base_directory: str
@@ -183,10 +219,20 @@ class KPDConfig:
 
     @classmethod
     def from_json_v2(cls, json: Dict) -> "KPDConfig":
+        email = None
+        if (
+            "smtp_host" in json
+            and "smtp_user" in json
+            and "smtp_from" in json
+            and "smtp_pass" in json
+        ):
+            email = EmailConfig.from_json_v2(json)
+
         return cls(
             version=2,
             tag_to_branch_mapping=json.get("tag_to_branch_mapping", {}),
             patchwork=PatchworksConfig.from_json_v2(json),
+            email=email,
             branches={
                 name: BranchConfig.from_json_v2(json_config)
                 for name, json_config in json["branches"].items()
@@ -200,6 +246,7 @@ class KPDConfig:
             version=3,
             tag_to_branch_mapping=json["tag_to_branch_mapping"],
             patchwork=PatchworksConfig.from_json_v3(json["patchwork"]),
+            email=EmailConfig.from_json_v3(json["email"]) if "email" in json else None,
             branches={
                 name: BranchConfig.from_json_v3(json_config)
                 for name, json_config in json["branches"].items()

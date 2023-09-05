@@ -12,6 +12,15 @@
       ],
       "lookback": 1
     },
+    "email": {
+      "host": "mail.example.com",
+      "port": 465,
+      "user": "bot-bpf-ci",
+      "from": "bot+bpf-ci@example.com",
+      "to": ["email1@example.com", "email2@example.com"],
+      "pass": "super-secret-is-king",
+      "http_proxy": "http://example.com:8080"
+    },
     "tag_to_branch_mapping": {
       "tag": [
         "branch"

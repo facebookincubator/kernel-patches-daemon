@@ -11,6 +11,13 @@
             "key": "value"
         }
     ],
+    "smtp_host": "mail.example.com",
+    "smtp_port": 465,
+    "smtp_user": "bot-bpf-ci",
+    "smtp_from": "bot+bpf-ci@example.com",
+    "smtp_to": ["email1@example.com", "email2@example.com"],
+    "smtp_pass": "super-secret-is-king",
+    "smtp_http_proxy": "http://example.com:8080",
     "tag_to_branch_mapping": {
         "tag": [
             "branch"
