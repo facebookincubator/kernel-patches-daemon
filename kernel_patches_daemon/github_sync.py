@@ -91,6 +91,7 @@ class GithubSync(Stats):
                 http_retries=http_retries,
                 github_oauth_token=branch_config.github_oauth_token,
                 app_auth=github_app_auth_from_branch_config(branch_config),
+                email=kpd_config.email,
             )
             for branch, branch_config in kpd_config.branches.items()
         }

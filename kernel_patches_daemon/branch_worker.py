@@ -14,8 +14,12 @@ import tempfile
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Generator, IO, List, Optional, Tuple
+from subprocess import PIPE
+from typing import Any, Dict, Final, Generator, IO, List, Optional, Tuple
 
 import dateutil.parser
 import git
@@ -24,6 +28,7 @@ from github.Label import Label as GithubLabel
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+from kernel_patches_daemon.config import EmailConfig
 from kernel_patches_daemon.github_connector import GithubConnector
 from kernel_patches_daemon.patchwork import Patchwork, Series, Subject
 from kernel_patches_daemon.stats import HistogramMetricTimer
@@ -63,6 +68,88 @@ MERGE_CONFLICT_LABEL = "merge-conflict"
 UPSTREAM_REMOTE_NAME = "upstream"
 
 
+EMAIL_TEMPLATE_BASE: Final[
+    str
+] = """\
+Dear BPF patch submitter,
+
+Your Patchwork submission
+{pw_series_name} [1]
+{body}
+[1] {pw_series_url}
+
+
+
+Please note: this email is coming from an unmonitored mailbox. If you have
+questions or feedback, please reach out to the Meta Kernel CI team at
+kernel-ci@meta.com.
+"""
+
+EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[
+    str
+] = """\
+failed to apply cleanly for BPF CI testing. Please rebase it onto the most
+recent upstream change and resubmit the patch to get it tested again.
+"""
+
+EMAIL_TEMPLATE_SUCCESS_BODY: Final[
+    str
+] = """\
+has been tested as part of [0] and passed all checks. No further action is
+necessary on your part.
+
+[0] {github_actions_url}\
+"""
+
+EMAIL_TEMPLATE_FAILURE_BODY: Final[
+    str
+] = """\
+has been tested as part of [0] and one or more tests failed.
+
+Please take a look at the failures to ensure that they are not caused by your
+changes.
+
+[0] {github_actions_url}\
+"""
+
+
+class Status(Enum):
+    SKIPPED = "skipped"
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CONFLICT = "conflict"
+
+
+def gh_conclusion_to_status(gh_conclusion: str) -> Status:
+    if gh_conclusion in (
+        "failure",
+        "timed_out",
+        "action_required",
+        "startup_failure",
+        "stale",
+    ):
+        return Status.FAILURE
+
+    # A "success" overwrites any skips, as the latter are effectively
+    # neutral.
+    if gh_conclusion in ("success",):
+        return Status.SUCCESS
+
+    return Status.SKIPPED
+
+
+class StatusLabelSuffixes(Enum):
+    PASS = "ci-pass"
+    FAIL = "ci-fail"
+
+    @classmethod
+    def all(cls):
+        return [c.value for c in cls]
+
+    def to_label(self, version: int) -> str:
+        return f"V{version}-{self.value}"
+
+
 class NewPRWithNoChangeException(Exception):
     def __init__(self, base_branch, target_branch, *args):
         super().__init__(args)
@@ -74,6 +161,64 @@ class NewPRWithNoChangeException(Exception):
             f"No changes between {self.base_branch} and {self.target_branch}, "
             "cannot create PR if there is no change. Was this series/patches recently merged?"
         )
+
+
+def furnish_ci_email_body(
+    status: Status, series: Series, github_actions_url: str
+) -> str:
+    """Prepare the body of a BPF CI email according to the provided status."""
+    if status == Status.SUCCESS:
+        body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=github_actions_url)
+    elif status == Status.FAILURE:
+        body = EMAIL_TEMPLATE_FAILURE_BODY.format(github_actions_url=github_actions_url)
+    else:
+        assert status == Status.CONFLICT
+        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY
+
+    return EMAIL_TEMPLATE_BASE.format(
+        pw_series_name=series.name, pw_series_url=series.web_url + "&state=*", body=body
+    )
+
+
+async def send_email(config: EmailConfig, subject: str, body: str):
+    """Send an email."""
+    # We work with curl as it's the only thing that supports SMTP via an HTTP
+    # proxy, which is something we require for production environments.
+    args = [
+        "curl",
+        "--silent",
+        "--show-error",
+        "--ssl-reqd",
+        f"smtps://{config.smtp_host}",
+        "--mail-from",
+        config.smtp_from,
+        # We can't necessarily guarantee validity of all email addresses, so make
+        # sending best-effort and not abort after the first error.
+        "--mail-rcpt-allowfails",
+        "--user",
+        f"{config.smtp_user}:{config.smtp_pass}",
+        "--upload-file",
+        "-",
+    ]
+
+    for to in config.smtp_to:
+        args += ["--mail-rcpt", to]
+
+    if config.smtp_http_proxy is not None:
+        args += ["--proxy", config.smtp_http_proxy]
+
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = config.smtp_from
+    msg["To"] = ",".join(config.smtp_to)
+    msg.attach(MIMEText(body, "plain"))
+    proc = await asyncio.create_subprocess_exec(
+        *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
+    )
+    stdout, stderr = await proc.communicate(input=msg.as_string().encode())
+    rc = await proc.wait()
+    if rc != 0:
+        logger.error("failed to send email: {stdout.decode()} {stderr.decode()}")
 
 
 def _is_pr_flagged(pr: PullRequest) -> bool:
@@ -189,6 +334,7 @@ class BranchWorker(GithubConnector):
         ci_branch: str,
         github_oauth_token: Optional[str] = None,
         app_auth: Optional[Auth.AppInstallationAuth] = None,
+        email: Optional[EmailConfig] = None,
         http_retries: Optional[int] = None,
     ) -> None:
         super().__init__(
@@ -199,6 +345,7 @@ class BranchWorker(GithubConnector):
         )
 
         self.patchwork = patchwork
+        self.email = email
 
         self.ci_repo_url = ci_repo_url
         self.ci_repo_dir = _uniq_tmp_folder(ci_repo_url, ci_branch, base_directory)
@@ -507,7 +654,12 @@ class BranchWorker(GithubConnector):
                     self._add_pull_request_comment(pr, message)
                     pr_updated.add(1)
 
-            pr.set_labels(*pr_labels)
+            # Make sure that we preserve any CI status labels.
+            status_labels = {
+                suffix.to_label(series.version) for suffix in StatusLabelSuffixes
+            }
+            labels = {label.name for label in pr.labels if label.name in status_labels}
+            pr.set_labels(*pr_labels | labels)
 
             if close:
                 pr_closed.add(1)
@@ -723,8 +875,8 @@ class BranchWorker(GithubConnector):
                 context=f"{ctx}-PR",
                 description=MERGE_CONFLICT_LABEL,
             )
-
-            return None
+            await self.evaluate_ci_result(series, pr)
+            return
 
         logger.info(f"Fetching check suites for {pr.number}: {pr.head.ref}")
         # we use github actions, need to use check suite apis instead of combined status
@@ -774,6 +926,96 @@ class BranchWorker(GithubConnector):
             for idx, vmtest in enumerate(vmtests)
         ]
         await asyncio.gather(*tasks)
+
+        await self.evaluate_ci_result(series, pr, vmtests)
+
+    def get_github_actions_url(self, pr: PullRequest, status: Status) -> str:
+        """Find a URL representing a GitHub Actions run for the given pull
+        request with the given status.
+        """
+        # If we can't find a matching run we just work with the pull request
+        # URL.
+        github_actions_url = pr.html_url
+        # Attempt to retrieve the URL to the workflow summary page.
+        for run in self.repo.get_workflow_runs(head_sha=pr.head.sha):
+            # We use the page of the first run that has the conclusion we
+            # report.
+            if gh_conclusion_to_status(run.conclusion) == status:
+                github_actions_url = run.html_url
+                break
+
+        return github_actions_url
+
+    async def evaluate_ci_result(self, series: Series, pr: PullRequest, vmtests=None):
+        """Evaluate the result of a CI run and send an email as necessary."""
+        email = self.email
+        if email is None:
+            logger.info("No email configuration present; skipping sending...")
+            return
+
+        if vmtests is None:
+            # Should only be called with `vmtests` being `None` on merge conflict.
+            assert _is_pr_flagged(pr)
+            status = Status.CONFLICT
+        else:
+            if any((vmtest.conclusion is None for vmtest in vmtests)):
+                # Not all tests are complete yet. Too early to evaluate.
+                return
+
+            # Boil down the GitHub conclusion to either "success", "failure", or
+            # "skipped". The GitHub reported "check suite" conclusion is bogus. We
+            # look at individual run results.
+            # (https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite)
+            status = Status.SKIPPED
+            for vmtest in vmtests:
+                vmtest_status = gh_conclusion_to_status(vmtest.conclusion)
+                if vmtest_status == Status.FAILURE:
+                    # "failure" is sticky.
+                    status = vmtest_status
+                    break
+                elif vmtest_status == Status.SUCCESS:
+                    status = vmtest_status
+                else:
+                    # We ignore anything classified as `Skipped`, as that's the
+                    # starting state and we treat it as "neutral".
+                    pass
+
+            # There were no successes and no failures. Guess we don't do anything
+            # then.
+            if status == Status.SKIPPED:
+                return
+
+        if status == Status.SUCCESS:
+            new_label = StatusLabelSuffixes.PASS.to_label(series.version)
+            not_label = StatusLabelSuffixes.FAIL.to_label(series.version)
+            subject = f"BPF CI -- success ({series.name})"
+        else:
+            assert status in (Status.FAILURE, Status.CONFLICT), status
+            new_label = StatusLabelSuffixes.FAIL.to_label(series.version)
+            not_label = StatusLabelSuffixes.PASS.to_label(series.version)
+            subject = f"BPF CI -- failure ({series.name})"
+
+        github_actions_url = self.get_github_actions_url(pr, status)
+        body = furnish_ci_email_body(status, series, github_actions_url)
+
+        labels = {label.name for label in pr.labels}
+        # Always make sure to remove the unused label so that we eventually
+        # converge on having only one pass/fail label for each version, come
+        # whatever.
+        if not_label in labels:
+            logger.info(
+                f"PR {pr.number} {pr.title} was previously {not_label} and "
+                f"is now {new_label}; removing {not_label} label"
+            )
+            pr.remove_from_labels(not_label)
+
+        if new_label not in labels:
+            # Either this is the first run we had for this patch version (no
+            # label was there) or we switched states (pass <-> fail). Either
+            # way, send an email notifying the submitter.
+            logger.info(f"PR {pr.number} {pr.title} is now {new_label}; adding label")
+            pr.add_to_labels(new_label)
+            await send_email(email, subject, body)
 
     def expire_branches(self) -> None:
         for branch in self.branches:
