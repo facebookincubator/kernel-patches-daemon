@@ -476,7 +476,6 @@ class BranchWorker(GithubConnector):
         logging.info(f"Checking local sync repo at {path}")
 
         if os.path.exists(f"{path}/.git"):
-            # pyre-fixme[16]: `Repo` has no attribute `init`.
             repo = git.Repo.init(path)
             try:
                 with HistogramMetricTimer(git_fetch_duration, {"branch": branch}):

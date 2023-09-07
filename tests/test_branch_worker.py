@@ -414,7 +414,6 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             # path does exists
             exists.return_value = True
             self._git_repo_mock.init.return_value.git.fetch.side_effect = (
-                # pyre-fixme[28]: Unexpected keyword argument `command`.
                 GitCommandError(command="foo bar")
             )
             self._bw.fetch_repo(*fetch_params)
