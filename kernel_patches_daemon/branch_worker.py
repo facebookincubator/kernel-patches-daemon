@@ -218,7 +218,7 @@ async def send_email(config: EmailConfig, subject: str, body: str):
     stdout, stderr = await proc.communicate(input=msg.as_string().encode())
     rc = await proc.wait()
     if rc != 0:
-        logger.error("failed to send email: {stdout.decode()} {stderr.decode()}")
+        logger.error(f"failed to send email: {stdout.decode()} {stderr.decode()}")
 
 
 def _is_pr_flagged(pr: PullRequest) -> bool:
