@@ -192,9 +192,6 @@ async def send_email(config: EmailConfig, subject: str, body: str):
         f"smtps://{config.smtp_host}",
         "--mail-from",
         config.smtp_from,
-        # We can't necessarily guarantee validity of all email addresses, so make
-        # sending best-effort and not abort after the first error.
-        "--mail-rcpt-allowfails",
         "--user",
         f"{config.smtp_user}:{config.smtp_pass}",
         "--upload-file",
