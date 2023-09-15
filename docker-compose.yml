@@ -1,0 +1,7 @@
+version: "3.8"
+services:
+  kernel_patches_daemon:
+    build: .
+    image: ghcr.io/facebookincubator/kernel-patches-daemon:latest
+    volumes:
+      - ./configs:/app/configs

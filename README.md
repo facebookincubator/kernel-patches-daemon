@@ -45,6 +45,26 @@ poetry run python -m unittests
 poetry run python -m kernel_patches_daemon --config <config_path> --label-color configs/labels.json
 ```
 
+## Docker
+
+Kernel Patches Daemon is available as pre-build image:
+
+```
+$ docker pull ghcr.io/facebookincubator/kernel-patches-daemon:latest
+```
+
+To build Kernel Patches Daemon with [Docker](https://docs.docker.com/engine/install):
+
+1. Install [Docker](https://docs.docker.com/engine/install) and [docker-compose](https://docs.docker.com/compose/install/)
+2. Build image
+```
+$ docker-compose build
+```
+3. Start KPD service
+```
+$ docker-compose up
+```
+
 ## CONTRIBUTING
 See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 
