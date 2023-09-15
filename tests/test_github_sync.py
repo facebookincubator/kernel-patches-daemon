@@ -14,11 +14,13 @@ from kernel_patches_daemon.github_sync import GithubSync
 
 TEST_BRANCH = "test-branch"
 TEST_CONFIG = {
-    "version": 2,
-    "project": "test",
-    "pw_url": "pw",
-    "pw_search_patterns": "pw-search-pattern",
-    "pw_lookback": 5,
+    "version": 3,
+    "patchwork": {
+        "project": "test",
+        "server": "pw",
+        "search_patterns": ["pw-search-pattern"],
+        "lookback": 5,
+    },
     "branches": {
         TEST_BRANCH: {
             "repo": "repo",
@@ -28,7 +30,8 @@ TEST_CONFIG = {
             "ci_branch": "test_ci_branch",
         }
     },
-    "tag_to_branch_mapping": [],
+    "tag_to_branch_mapping": {},
+    "base_directory": "/tmp",
 }
 
 
