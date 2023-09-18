@@ -88,8 +88,10 @@ kernel-ci@meta.com.
 EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[
     str
 ] = """\
-failed to apply cleanly for BPF CI testing. Please rebase it onto the most
+failed to apply cleanly for BPF CI testing [0]. Please rebase it onto the most
 recent upstream change and resubmit the patch to get it tested again.
+
+[0] {github_pr_url}\
 """
 
 EMAIL_TEMPLATE_SUCCESS_BODY: Final[
@@ -193,7 +195,7 @@ def furnish_ci_email_body(
         body = EMAIL_TEMPLATE_FAILURE_BODY.format(github_actions_url=github_actions_url)
     else:
         assert status == Status.CONFLICT
-        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY
+        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=pr.html_url)
 
     return EMAIL_TEMPLATE_BASE.format(
         pw_series_name=series.name, pw_series_url=series.web_url + "&state=*", body=body
