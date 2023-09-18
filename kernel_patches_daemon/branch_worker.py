@@ -163,6 +163,24 @@ class NewPRWithNoChangeException(Exception):
         )
 
 
+def get_github_actions_url(repo: Repository, pr: PullRequest, status: Status) -> str:
+    """Find a URL representing a GitHub Actions run for the given pull
+    request with the given status.
+    """
+    # If we can't find a matching run we just work with the pull request
+    # URL.
+    github_actions_url = pr.html_url
+    # Attempt to retrieve the URL to the workflow summary page.
+    for run in repo.get_workflow_runs(head_sha=pr.head.sha):
+        # We use the page of the first run that has the conclusion we
+        # report.
+        if gh_conclusion_to_status(run.conclusion) == status:
+            github_actions_url = run.html_url
+            break
+
+    return github_actions_url
+
+
 def furnish_ci_email_body(
     status: Status, series: Series, github_actions_url: str
 ) -> str:
@@ -925,23 +943,6 @@ class BranchWorker(GithubConnector):
 
         await self.evaluate_ci_result(series, pr, vmtests)
 
-    def get_github_actions_url(self, pr: PullRequest, status: Status) -> str:
-        """Find a URL representing a GitHub Actions run for the given pull
-        request with the given status.
-        """
-        # If we can't find a matching run we just work with the pull request
-        # URL.
-        github_actions_url = pr.html_url
-        # Attempt to retrieve the URL to the workflow summary page.
-        for run in self.repo.get_workflow_runs(head_sha=pr.head.sha):
-            # We use the page of the first run that has the conclusion we
-            # report.
-            if gh_conclusion_to_status(run.conclusion) == status:
-                github_actions_url = run.html_url
-                break
-
-        return github_actions_url
-
     async def evaluate_ci_result(self, series: Series, pr: PullRequest, vmtests=None):
         """Evaluate the result of a CI run and send an email as necessary."""
         email = self.email
@@ -991,7 +992,7 @@ class BranchWorker(GithubConnector):
             not_label = StatusLabelSuffixes.PASS.to_label(series.version)
             subject = f"BPF CI -- failure ({series.name})"
 
-        github_actions_url = self.get_github_actions_url(pr, status)
+        github_actions_url = get_github_actions_url(self.repo, pr, status)
         body = furnish_ci_email_body(status, series, github_actions_url)
 
         labels = {label.name for label in pr.labels}
