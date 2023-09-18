@@ -182,12 +182,14 @@ def get_github_actions_url(repo: Repository, pr: PullRequest, status: Status) ->
 
 
 def furnish_ci_email_body(
-    status: Status, series: Series, github_actions_url: str
+    repo: Repository, pr: PullRequest, status: Status, series: Series
 ) -> str:
     """Prepare the body of a BPF CI email according to the provided status."""
     if status == Status.SUCCESS:
+        github_actions_url = get_github_actions_url(repo, pr, status)
         body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=github_actions_url)
     elif status == Status.FAILURE:
+        github_actions_url = get_github_actions_url(repo, pr, status)
         body = EMAIL_TEMPLATE_FAILURE_BODY.format(github_actions_url=github_actions_url)
     else:
         assert status == Status.CONFLICT
@@ -992,8 +994,7 @@ class BranchWorker(GithubConnector):
             not_label = StatusLabelSuffixes.PASS.to_label(series.version)
             subject = f"BPF CI -- failure ({series.name})"
 
-        github_actions_url = get_github_actions_url(self.repo, pr, status)
-        body = furnish_ci_email_body(status, series, github_actions_url)
+        body = furnish_ci_email_body(self.repo, pr, status, series)
 
         labels = {label.name for label in pr.labels}
         # Always make sure to remove the unused label so that we eventually
