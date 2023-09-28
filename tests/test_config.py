@@ -28,8 +28,8 @@ class TestConfig(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-    def test_valid_v3(self) -> None:
-        kpd_config_json = read_fixture("fixtures/kpd_config_v3.json")
+    def test_valid(self) -> None:
+        kpd_config_json = read_fixture("fixtures/kpd_config.json")
 
         with patch(
             "builtins.open", mock_open(read_data="TEST_KEY_FILE_CONTENT")
