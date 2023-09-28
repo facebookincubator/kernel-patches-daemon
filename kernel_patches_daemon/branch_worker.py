@@ -202,7 +202,7 @@ def furnish_ci_email_body(
     )
 
 
-async def send_email(config: EmailConfig, subject: str, body: str):
+async def send_email(config: EmailConfig, series: Series, subject: str, body: str):
     """Send an email."""
     # We work with curl as it's the only thing that supports SMTP via an HTTP
     # proxy, which is something we require for production environments.
@@ -220,7 +220,11 @@ async def send_email(config: EmailConfig, subject: str, body: str):
         "-",
     ]
 
-    for to in config.smtp_to:
+    to_list = copy.copy(config.smtp_to)
+    if series.submitter_email in config.submitter_allowlist:
+        to_list += [series.submitter_email]
+
+    for to in to_list:
         args += ["--mail-rcpt", to]
 
     if config.smtp_http_proxy is not None:
@@ -229,7 +233,7 @@ async def send_email(config: EmailConfig, subject: str, body: str):
     msg = MIMEMultipart()
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
-    msg["To"] = ",".join(config.smtp_to)
+    msg["To"] = ",".join(to_list)
     msg.attach(MIMEText(body, "plain"))
     proc = await asyncio.create_subprocess_exec(
         *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
@@ -1015,7 +1019,7 @@ class BranchWorker(GithubConnector):
             # way, send an email notifying the submitter.
             logger.info(f"PR {pr.number} {pr.title} is now {new_label}; adding label")
             pr.add_to_labels(new_label)
-            await send_email(email, subject, body)
+            await send_email(email, series, subject, body)
 
     def expire_branches(self) -> None:
         for branch in self.branches:

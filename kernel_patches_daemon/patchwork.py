@@ -346,6 +346,7 @@ class Series:
         self.url = data["url"]
         self.web_url = data["web_url"]
         self.version = data["version"]
+        self._submitter_email = data["submitter"]["email"]
         self.mbox = data["mbox"]
         self.patches = data.get("patches", [])
         self.cover_letter = data.get("cover_letter")
@@ -473,6 +474,11 @@ class Series:
 
     def __repr__(self) -> str:
         return f"Series({self.to_json()})"
+
+    @property
+    def submitter_email(self):
+        """Retrieve the email address of the patch series submitter."""
+        return self._submitter_email
 
 
 class Patchwork:
@@ -709,6 +715,9 @@ class Patchwork:
                 patch_series = patch["series"]
                 for series_data in patch_series:
                     if series_data["name"]:
+                        series_data["submitter"] = {
+                            "email": patch["submitter"]["email"],
+                        }
                         series = Series(self, series_data)
                         logger.debug(f"Adding {series.id} into list of known series.")
                         self.known_series[series.id] = series

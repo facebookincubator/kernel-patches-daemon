@@ -55,6 +55,8 @@ class TestConfig(unittest.TestCase):
                 smtp_to=["email1@example.com", "email2@example.com"],
                 smtp_pass="super-secret-is-king",
                 smtp_http_proxy="http://example.com:8080",
+                # pyre-ignore
+                submitter_allowlist=["email3@example.com", "email4@example.com"],
             ),
             tag_to_branch_mapping={"tag": ["branch"]},
             branches={

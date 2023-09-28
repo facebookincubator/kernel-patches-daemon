@@ -78,6 +78,7 @@ SERIES_DATA = {
     "version": 0,
     "url": "https://example.com",
     "web_url": "https://example.com",
+    "submitter": {"email": "a-user@example.com"},
     "mbox": "https://example.com",
 }
 

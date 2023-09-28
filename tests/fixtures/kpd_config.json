@@ -19,7 +19,8 @@
       "from": "bot+bpf-ci@example.com",
       "to": ["email1@example.com", "email2@example.com"],
       "pass": "super-secret-is-king",
-      "http_proxy": "http://example.com:8080"
+      "http_proxy": "http://example.com:8080",
+      "submitter_allowlist": ["email3@example.com", "email4@example.com"]
     },
     "tag_to_branch_mapping": {
       "tag": [

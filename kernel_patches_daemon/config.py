@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,12 @@ class EmailConfig:
     smtp_pass: str
     smtp_to: List[str]
     smtp_http_proxy: Optional[str]
+    # List of email addresses of patch submitters to whom we send email
+    # notifications only for *their* very submission. This attribute is meant to
+    # be temporary while the email notification feature is being rolled out.
+    # Once we send email notifications to all patch submitters it can be
+    # removed.
+    submitter_allowlist: Set[str]
 
     @classmethod
     def from_json(cls, json: Dict) -> "EmailConfig":
@@ -118,6 +124,7 @@ class EmailConfig:
             smtp_pass=json["pass"],
             smtp_to=json.get("to", []),
             smtp_http_proxy=json.get("http_proxy", None),
+            submitter_allowlist=json.get("submitter_allowlist", set()),
         )
 
 

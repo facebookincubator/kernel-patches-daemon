@@ -91,6 +91,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has relevant diff and is neither the oldest, nor the newest serie. Appears before FOO_SERIES_FIRST to ensure sorting is performed.
@@ -102,6 +103,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has relevant diff
@@ -113,6 +115,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has only non-relevant diffs
@@ -124,6 +127,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has one relevant diffs
@@ -135,6 +139,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has one relevant diffs, not the most recent series, appears after FOO_SERIES_LAST to ensure sorting is performed.
@@ -146,6 +151,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches and has only non-relevant diffs
@@ -157,6 +163,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 0,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
     ],
@@ -171,6 +178,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 1,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
         # Matches, has one relevant diffs, and is the most recent series.
@@ -182,6 +190,7 @@ DEFAULT_TEST_RESPONSES = {
             "version": 2,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
     ],
@@ -196,6 +205,8 @@ DEFAULT_TEST_RESPONSES = {
             "version": 2,
             "url": "https://example.com",
             "web_url": "https://example.com",
+            "submitter": {"email": "a-user@example.com"},
+            "submitter": {"email": "a-user@example.com"},
             "mbox": "https://example.com",
         },
     ],
@@ -254,6 +265,7 @@ DEFAULT_TEST_RESPONSES = {
         "version": 4,
         "url": "https://example.com",
         "web_url": "https://example.com",
+        "submitter": {"email": "a-user@example.com"},
         "mbox": "https://example.com",
     },
     # Patch in an relevant state.
@@ -297,6 +309,7 @@ DEFAULT_TEST_RESPONSES = {
         "version": 0,
         "url": "https://example.com",
         "web_url": "https://example.com",
+        "submitter": {"email": "a-user@example.com"},
         "mbox": "https://example.com",
     },
     # Patch in an irrelevant state.
@@ -325,6 +338,7 @@ DEFAULT_TEST_RESPONSES = {
         "version": 1,
         "url": "https://example.com",
         "web_url": "https://example.com",
+        "submitter": {"email": "a-user@example.com"},
         "mbox": "https://example.com",
     },
     # Expiration test cases
@@ -338,6 +352,7 @@ DEFAULT_TEST_RESPONSES = {
         "version": 1,
         "url": "https://example.com",
         "web_url": "https://example.com",
+        "submitter": {"email": "a-user@example.com"},
         "mbox": "https://example.com",
     },
     # Patch in a non-expirable state.
@@ -375,6 +390,7 @@ DEFAULT_TEST_RESPONSES = {
         "version": 1,
         "url": "https://example.com",
         "web_url": "https://example.com",
+        "submitter": {"email": "a-user@example.com"},
         "mbox": "https://example.com",
     },
     # Patch in a non-expirable state.
