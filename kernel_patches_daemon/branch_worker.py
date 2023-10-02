@@ -900,37 +900,38 @@ class BranchWorker(GithubConnector):
             await self.evaluate_ci_result(series, pr)
             return
 
-        logger.info(f"Fetching check suites for {pr.number}: {pr.head.ref}")
-        # we use github actions, need to use check suite apis instead of combined status
-        # https://docs.github.com/en/rest/reference/checks#check-suites
-        cmt = self.repo.get_commit(pr.head.sha)
+        logger.info(f"Fetching workflow runs for {pr.number}: {pr.head.ref}")
+
         conclusion = None
+        jobs = []
 
-        # There is only 1 github-action check suite
-        for suite in cmt.get_check_suites():
-            if suite.app.id == CI_APP:
-                conclusion = suite.conclusion
-                break
+        for run in self.repo.get_workflow_runs(
+            actor=self.user_login,
+            head_sha=pr.head.sha,
+            status="completed",
+        ):
+            if conclusion is None:
+                # TODO: This logic is and has been broken. For months now
+                #       (as of 2023-09) we have a lint workflow that shows
+                #       up as a second run with potentially different
+                #       conclusion. This can cause random flips of
+                #       conclusion state if GitHub reports runs in different
+                #       order.
+                conclusion = run.conclusion
+                if conclusion is None:
+                    logger.info(
+                        f"GitHub unexpectedly returned a None conclusion for workflow run {run}"
+                    )
 
-        # We report the latest check-runs that belong to CI_APP suite ID.
-        # In order to keep PW contexts somewhat deterministic, we sort the array of vmtests by name
-        # and later use the index of the test in the array to generate the context name.
-        vmtests = sorted(
-            [
-                run
-                for run in cmt.get_check_runs(filter="latest")
-                if run.app.id == CI_APP
-            ],
-            key=lambda x: x.name,
-        )
+            jobs += run.jobs()
 
-        vmtests_log = [
-            f"{vmtest.conclusion} ({vmtest.details_url})" for vmtest in vmtests
-        ]
+        # In order to keep PW contexts somewhat deterministic, we sort the array
+        # of jobs by name and later use the index of the test in the array to
+        # generate the context name.
+        jobs = sorted(jobs, key=lambda job: job.name)
+        jobs_logs = [f"{job.conclusion} ({job.html_url})" for job in jobs]
 
-        logger.info(
-            f"Check suite status: overall: '{conclusion}', vmtests: '{vmtests_log}"
-        )
+        logger.info(f"Workflow status: overall: '{conclusion}', jobs: '{jobs_logs}")
         tasks = [
             self.submit_pr_summary(
                 series=series,
@@ -940,16 +941,16 @@ class BranchWorker(GithubConnector):
             )
         ] + [
             series.set_check(
-                state=vmtest.conclusion,
-                target_url=vmtest.details_url,
+                state=job.conclusion,
+                target_url=job.html_url,
                 context=f"{ctx}-{CI_VMTEST_NAME}-{idx}",
-                description=f"Logs for {vmtest.name}",
+                description=f"Logs for {job.name}",
             )
-            for idx, vmtest in enumerate(vmtests)
+            for idx, job in enumerate(jobs)
         ]
         await asyncio.gather(*tasks)
 
-        await self.evaluate_ci_result(series, pr, vmtests)
+        await self.evaluate_ci_result(series, pr, jobs)
 
     async def evaluate_ci_result(self, series: Series, pr: PullRequest, vmtests=None):
         """Evaluate the result of a CI run and send an email as necessary."""
