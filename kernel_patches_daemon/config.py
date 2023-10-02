@@ -106,6 +106,7 @@ class EmailConfig:
     smtp_from: str
     smtp_pass: str
     smtp_to: List[str]
+    smtp_cc: List[str]
     smtp_http_proxy: Optional[str]
     # List of email addresses of patch submitters to whom we send email
     # notifications only for *their* very submission. This attribute is meant to
@@ -123,6 +124,7 @@ class EmailConfig:
             smtp_from=json["from"],
             smtp_pass=json["pass"],
             smtp_to=json.get("to", []),
+            smtp_cc=json.get("cc", []),
             smtp_http_proxy=json.get("http_proxy", None),
             submitter_allowlist=json.get("submitter_allowlist", set()),
         )

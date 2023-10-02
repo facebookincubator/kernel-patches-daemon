@@ -52,11 +52,15 @@ class TestConfig(unittest.TestCase):
                 smtp_port=465,
                 smtp_user="bot-bpf-ci",
                 smtp_from="bot+bpf-ci@example.com",
-                smtp_to=["email1@example.com", "email2@example.com"],
+                smtp_to=["email1-to@example.com", "email2-to@example.com"],
+                smtp_cc=["email1-cc@example.com", "email2-cc@example.com"],
                 smtp_pass="super-secret-is-king",
                 smtp_http_proxy="http://example.com:8080",
                 # pyre-ignore
-                submitter_allowlist=["email3@example.com", "email4@example.com"],
+                submitter_allowlist=[
+                    "email1-allow@example.com",
+                    "email2-allow@example.com",
+                ],
             ),
             tag_to_branch_mapping={"tag": ["branch"]},
             branches={

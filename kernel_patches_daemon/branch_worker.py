@@ -221,10 +221,12 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
     ]
 
     to_list = copy.copy(config.smtp_to)
+    cc_list = copy.copy(config.smtp_cc)
+
     if series.submitter_email in config.submitter_allowlist:
         to_list += [series.submitter_email]
 
-    for to in to_list:
+    for to in to_list + cc_list:
         args += ["--mail-rcpt", to]
 
     if config.smtp_http_proxy is not None:
@@ -233,7 +235,10 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
     msg = MIMEMultipart()
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
-    msg["To"] = ",".join(to_list)
+    if to_list:
+        msg["To"] = ",".join(to_list)
+    if cc_list:
+        msg["Cc"] = ",".join(cc_list)
     msg.attach(MIMEText(body, "plain"))
     proc = await asyncio.create_subprocess_exec(
         *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
