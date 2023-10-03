@@ -202,6 +202,12 @@ def furnish_ci_email_body(
     )
 
 
+def generate_msg_id(host: str, series_url: str) -> str:
+    """Generate an email message ID based on the provided host and Patchwork series URL."""
+    checksum = hashlib.sha256(series_url.encode("utf-8")).hexdigest()
+    return f"{checksum}@{host}"
+
+
 async def send_email(config: EmailConfig, series: Series, subject: str, body: str):
     """Send an email."""
     # We work with curl as it's the only thing that supports SMTP via an HTTP
@@ -233,6 +239,9 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
         args += ["--proxy", config.smtp_http_proxy]
 
     msg = MIMEMultipart()
+    # Add some RFC 822 style message ID to allow for easier grouping of emails
+    # for the same series.
+    msg["Message-Id"] = f"<{generate_msg_id(config.smtp_host, series.web_url)}>"
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
     if to_list:
