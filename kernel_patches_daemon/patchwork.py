@@ -352,7 +352,7 @@ class Series:
         self.cover_letter = data.get("cover_letter")
 
         try:
-            logging.debug(f"Parsing suject name from '{self.name}' series name")
+            logging.debug(f"Parsing subject name from '{self.name}' series name")
             self.subject = none_throws(re.match(SUBJECT_REGEXP, data["name"])).group(
                 "name"
             )

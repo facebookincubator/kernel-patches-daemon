@@ -202,9 +202,9 @@ def furnish_ci_email_body(
     )
 
 
-def generate_msg_id(host: str, series_url: str) -> str:
-    """Generate an email message ID based on the provided host and Patchwork series URL."""
-    checksum = hashlib.sha256(series_url.encode("utf-8")).hexdigest()
+def generate_msg_id(host: str) -> str:
+    """Generate an email message ID based on the provided host."""
+    checksum = hashlib.sha256(str(time.time()).encode("utf-8")).hexdigest()
     return f"{checksum}@{host}"
 
 
@@ -239,9 +239,16 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
         args += ["--proxy", config.smtp_http_proxy]
 
     msg = MIMEMultipart()
-    # Add some RFC 822 style message ID to allow for easier grouping of emails
-    # for the same series.
-    msg["Message-Id"] = f"<{generate_msg_id(config.smtp_host, series.web_url)}>"
+    # Add some RFC 822 style message ID to allow for easier referencing of this
+    # message. Note that it's not entirely correct for us to refer to a host
+    # that is not entirely under our control, but we don't want to expose our
+    # actual host name either. Collisions of a sha256 hash are assumed to be
+    # unlikely in many contexts, so we do the same.
+    msg["Message-Id"] = f"<{generate_msg_id(config.smtp_host)}>"
+    if series.cover_letter is not None:
+        msg["In-Reply-To"] = f"{series.cover_letter['msgid']}"
+    else:
+        msg["In-Reply-To"] = f"{series.patches[0]['msgid']}"
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
     if to_list:
