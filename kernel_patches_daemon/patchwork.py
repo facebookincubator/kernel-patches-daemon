@@ -711,24 +711,27 @@ class Patchwork:
             all_patches = await self.__get_objects_recursive(
                 "patches", params=patch_filters
             )
+
+            series_ids = set()
             for patch in all_patches:
-                patch_series = patch["series"]
-                for series_data in patch_series:
-                    if series_data["name"]:
-                        series_data["submitter"] = {
-                            "email": patch["submitter"]["email"],
-                        }
-                        series = Series(self, series_data)
-                        logger.debug(f"Adding {series.id} into list of known series.")
-                        self.known_series[series.id] = series
-                    else:
+                for series_data in patch["series"]:
+                    try:
+                        series_id = int(series_data["id"])
+                        series_ids.add(series_id)
+                    except ValueError:
+                        logger.error(f"Malformed series ID in: {series_data}")
                         err_malformed_series.add(1)
-                        logger.error(f"Malformed series: {series_data}")
                         continue
 
-                    if series.subject not in subjects:
-                        subjects[series.subject] = Subject(series.subject, self)
-                        self.known_subjects[series.subject] = subjects[series.subject]
+            tasks = [self.get_series_by_id(series_id) for series_id in series_ids]
+            all_series = await asyncio.gather(*tasks)
+
+            for series in all_series:
+                self.known_series[series.id] = series
+
+                if series.subject not in subjects:
+                    subjects[series.subject] = Subject(series.subject, self)
+                    self.known_subjects[series.subject] = subjects[series.subject]
 
             logger.info(f"Total subjects found: {len(subjects)}")
 
