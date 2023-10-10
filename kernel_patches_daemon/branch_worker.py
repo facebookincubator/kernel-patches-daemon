@@ -73,7 +73,7 @@ EMAIL_TEMPLATE_BASE: Final[
 ] = """\
 Dear BPF patch submitter,
 
-Your Patchwork submission
+[{status}] Your Patchwork submission
 {pw_series_name} [1]
 {body}
 [1] {pw_series_url}
@@ -198,7 +198,10 @@ def furnish_ci_email_body(
         body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=pr.html_url)
 
     return EMAIL_TEMPLATE_BASE.format(
-        pw_series_name=series.name, pw_series_url=series.web_url + "&state=*", body=body
+        status=str(status.value).upper(),
+        pw_series_name=series.name,
+        pw_series_url=series.web_url + "&state=*",
+        body=body,
     )
 
 
