@@ -715,6 +715,11 @@ class Patchwork:
             series_ids = set()
             for patch in all_patches:
                 for series_data in patch["series"]:
+                    if not series_data.get("name"):
+                        logger.error(f"Malformed series name in: {series_data}")
+                        err_malformed_series.add(1)
+                        continue
+
                     try:
                         series_id = int(series_data["id"])
                         series_ids.add(series_id)
