@@ -19,7 +19,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE
-from typing import Any, Dict, Final, Generator, IO, List, Optional, Tuple
+from typing import Any, Dict, Final, Generator, IO, Iterator, List, Optional, Tuple
 
 import dateutil.parser
 import git
@@ -123,6 +123,10 @@ class Status(Enum):
 
 
 def gh_conclusion_to_status(gh_conclusion: str) -> Status:
+    """Translate a GitHub conclusion to our `Status` enum."""
+    # See
+    # https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite
+    # for a list of conclusions.
     if gh_conclusion in (
         "failure",
         "timed_out",
@@ -138,6 +142,23 @@ def gh_conclusion_to_status(gh_conclusion: str) -> Status:
         return Status.SUCCESS
 
     return Status.SKIPPED
+
+
+def process_statuses(statuses: Iterator[Status]) -> Status:
+    """Boil down a set of `Status` objects into a single one."""
+    final = Status.SKIPPED
+    for status in statuses:
+        if status == Status.FAILURE:
+            # "failure" is sticky.
+            final = status
+            break
+        elif status == Status.SUCCESS:
+            final = status
+        else:
+            # We ignore anything classified as `Skipped`, as that's the
+            # starting state and we treat it as "neutral".
+            pass
+    return final
 
 
 class StatusLabelSuffixes(Enum):
@@ -996,21 +1017,10 @@ class BranchWorker(GithubConnector):
             # Boil down the GitHub conclusion to either "success", "failure", or
             # "skipped". The GitHub reported "check suite" conclusion is bogus. We
             # look at individual run results.
-            # (https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite)
-            status = Status.SKIPPED
-            for vmtest in vmtests:
-                vmtest_status = gh_conclusion_to_status(vmtest.conclusion)
-                if vmtest_status == Status.FAILURE:
-                    # "failure" is sticky.
-                    status = vmtest_status
-                    break
-                elif vmtest_status == Status.SUCCESS:
-                    status = vmtest_status
-                else:
-                    # We ignore anything classified as `Skipped`, as that's the
-                    # starting state and we treat it as "neutral".
-                    pass
-
+            statuses = (
+                gh_conclusion_to_status(vmtest.conclusion) for vmtest in vmtests
+            )
+            status = process_statuses(statuses)
             # There were no successes and no failures. Guess we don't do anything
             # then.
             if status == Status.SKIPPED:
