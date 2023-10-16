@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from enum import Enum
-from typing import Iterator
+from typing import Iterator, Optional
 
 
 class Status(Enum):
@@ -15,8 +15,12 @@ class Status(Enum):
     CONFLICT = "conflict"
 
 
-def gh_conclusion_to_status(gh_conclusion: str) -> Status:
+def gh_conclusion_to_status(gh_conclusion: Optional[str]) -> Status:
     """Translate a GitHub conclusion to our `Status` enum."""
+    # GitHub reports pending jobs with a `None` conclusion.
+    if gh_conclusion is None:
+        return Status.SKIPPED
+
     # See
     # https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite
     # for a list of conclusions.

@@ -910,10 +910,12 @@ class BranchWorker(GithubConnector):
         statuses: List[Status] = []
         jobs = []
 
+        # Note that we are interested in listing *all* runs and not just, say,
+        # completed ones. The reason being that the information that pending
+        # ones are present is very much relevant for status reporting.
         for run in self.repo.get_workflow_runs(
             actor=self.user_login,
             head_sha=pr.head.sha,
-            status="completed",
         ):
             statuses.append(gh_conclusion_to_status(run.conclusion))
             jobs += run.jobs()
