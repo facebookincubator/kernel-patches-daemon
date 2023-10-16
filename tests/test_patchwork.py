@@ -15,6 +15,7 @@ from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from kernel_patches_daemon.patchwork import parse_tags, RELEVANT_STATES, Subject, TTL
+from kernel_patches_daemon.status import Status
 from multidict import MultiDict
 from pyre_extensions import none_throws
 
@@ -427,7 +428,7 @@ class TestSeries(PatchworkTestCase):
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
             context=DEFAULT_CHECK_CTX,
-            state=None,
+            status=Status.SKIPPED,
             target_url="https://127.0.0.1:0/target",
         )
         # Hack... aioresponses stores the requests that were made in a dictionary whose's key is a tuple,
@@ -466,7 +467,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
@@ -506,7 +507,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
@@ -548,7 +549,7 @@ class TestSeries(PatchworkTestCase):
         series = await self._pw.get_series_by_id(665)
         # success is a conclusive (non-pending) state.
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, state="success", target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.SUCCESS, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
@@ -587,7 +588,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, state=None, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(

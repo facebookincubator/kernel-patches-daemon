@@ -20,6 +20,8 @@ import cachetools.keys
 import dateutil.parser as dateparser
 from aiohttp_retry import ExponentialRetry, RetryClient
 from cachetools import TTLCache
+
+from kernel_patches_daemon.status import Status
 from multidict import MultiDict
 
 from opentelemetry import metrics
@@ -52,20 +54,18 @@ IRRELEVANT_STATES: Dict[str, int] = {
     "handled-elsewhere": 17,
 }
 
-PW_CHECK_PENDING_STATES: Dict[Optional[str], str] = {
-    None: "pending",
-    "cancelled": "pending",
+PW_CHECK_PENDING_STATES: Dict[Status, str] = {
+    Status.SKIPPED: "pending",
 }
 
-PW_CHECK_CONCLUSIVE_STATES: Dict[str, str] = {
-    "success": "success",
-    "skipped": "success",
-    "warning": "warning",
-    "failure": "fail",
+PW_CHECK_CONCLUSIVE_STATES: Dict[Status, str] = {
+    Status.SUCCESS: "success",
+    Status.FAILURE: "fail",
+    Status.CONFLICT: "fail",
 }
 
 
-PW_CHECK_STATES: Dict[Optional[str], str] = {
+PW_CHECK_STATES: Dict[Status, str] = {
     **PW_CHECK_PENDING_STATES,
     **PW_CHECK_CONCLUSIVE_STATES,
 }
@@ -447,10 +447,10 @@ class Series:
 
         return False
 
-    async def set_check(self, **kwargs) -> None:
+    async def set_check(self, status: Status, **kwargs) -> None:
         tasks = [
             self.pw_client.post_check_for_patch_id(
-                patch_id=patch["id"], check_data=kwargs
+                patch_id=patch["id"], status=status, check_data=kwargs
             )
             for patch in self.patches
         ]
@@ -628,9 +628,9 @@ class Patchwork:
         return checks[0]
 
     async def post_check_for_patch_id(
-        self, patch_id: int, check_data: Dict[str, Any]
+        self, patch_id: int, status: Status, check_data: Dict[str, Any]
     ) -> Optional[aiohttp.ClientResponse]:
-        new_state = PW_CHECK_STATES.get(check_data["state"], PW_CHECK_STATES[None])
+        new_state = PW_CHECK_STATES.get(status, PW_CHECK_STATES[Status.SKIPPED])
         updated_check_data = {
             **check_data,
             "state": new_state,
@@ -643,8 +643,8 @@ class Patchwork:
                 patch_id, check_data["context"]
             )
             if (
-                check_data["state"] in PW_CHECK_PENDING_STATES
-                and PW_CHECK_PENDING_STATES[check_data["state"]] != check["state"]
+                status in PW_CHECK_PENDING_STATES
+                and PW_CHECK_PENDING_STATES[status] != check["state"]
             ):
                 logger.info(
                     f"Not posting state update for patch {patch_id}: "

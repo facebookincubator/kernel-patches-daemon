@@ -897,7 +897,7 @@ class BranchWorker(GithubConnector):
         ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
         if _is_pr_flagged(pr):
             await series.set_check(
-                state="failure",
+                status=Status.FAILURE,
                 target_url=pr.html_url,
                 context=f"{ctx}-PR",
                 description=MERGE_CONFLICT_LABEL,
@@ -907,7 +907,7 @@ class BranchWorker(GithubConnector):
 
         logger.info(f"Fetching workflow runs for {pr.number}: {pr.head.ref}")
 
-        conclusion = None
+        statuses: List[Status] = []
         jobs = []
 
         for run in self.repo.get_workflow_runs(
@@ -915,38 +915,30 @@ class BranchWorker(GithubConnector):
             head_sha=pr.head.sha,
             status="completed",
         ):
-            if conclusion is None:
-                # TODO: This logic is and has been broken. For months now
-                #       (as of 2023-09) we have a lint workflow that shows
-                #       up as a second run with potentially different
-                #       conclusion. This can cause random flips of
-                #       conclusion state if GitHub reports runs in different
-                #       order.
-                conclusion = run.conclusion
-                if conclusion is None:
-                    logger.info(
-                        f"GitHub unexpectedly returned a None conclusion for workflow run {run}"
-                    )
-
+            statuses.append(gh_conclusion_to_status(run.conclusion))
             jobs += run.jobs()
 
+        status = process_statuses(statuses)
         # In order to keep PW contexts somewhat deterministic, we sort the array
         # of jobs by name and later use the index of the test in the array to
         # generate the context name.
         jobs = sorted(jobs, key=lambda job: job.name)
-        jobs_logs = [f"{job.conclusion} ({job.html_url})" for job in jobs]
+        jobs_logs = [
+            f"{gh_conclusion_to_status(job.conclusion)} ({job.html_url})"
+            for job in jobs
+        ]
 
-        logger.info(f"Workflow status: overall: '{conclusion}', jobs: '{jobs_logs}")
+        logger.info(f"Workflow status: overall: '{status}', jobs: '{jobs_logs}")
         tasks = [
             self.submit_pr_summary(
                 series=series,
-                state=conclusion,
+                status=status,
                 context_name=ctx,
                 target_url=pr.html_url,
             )
         ] + [
             series.set_check(
-                state=job.conclusion,
+                status=gh_conclusion_to_status(job.conclusion),
                 target_url=job.html_url,
                 context=f"{ctx}-{CI_VMTEST_NAME}-{idx}",
                 description=f"Logs for {job.name}",
@@ -1050,11 +1042,11 @@ class BranchWorker(GithubConnector):
                 self._close_pr(pr)
 
     async def submit_pr_summary(
-        self, series: Series, state: str, context_name: str, target_url: str
+        self, series: Series, status: Status, context_name: str, target_url: str
     ) -> None:
         logger.info(f"Submiting PR summary for series {series.id}")
         await series.set_check(
-            state=state,
+            status=status,
             target_url=target_url,
             context=f"{context_name}-PR",
             description="PR summary",
