@@ -586,7 +586,7 @@ class Patchwork:
         self, path: AnyStr, data: Dict
     ) -> Optional[aiohttp.ClientResponse]:
         if not self.auth_token:
-            logger.warning(f"Patchwork POST {path}: read-only mode, request ignored")
+            logger.debug(f"Patchwork POST {path}: read-only mode, request ignored")
             logger.debug(f"Patchwork POST data: {json_pprint(data)}")
             return None
 
@@ -657,7 +657,7 @@ class Patchwork:
                 check.get("state") == new_state
                 and check.get("target_url") == check_data["target_url"]
             ):
-                logger.info(
+                logger.debug(
                     f"Not posting state update for patch {patch_id}: previous state '{new_state}' and url are the same"
                 )
                 return None
