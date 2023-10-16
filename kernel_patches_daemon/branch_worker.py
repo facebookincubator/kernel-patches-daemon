@@ -19,7 +19,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE
-from typing import Any, Dict, Final, Generator, IO, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Final, Generator, IO, List, Optional, Tuple
 
 import dateutil.parser
 import git
@@ -32,6 +32,11 @@ from kernel_patches_daemon.config import EmailConfig
 from kernel_patches_daemon.github_connector import GithubConnector
 from kernel_patches_daemon.patchwork import Patchwork, Series, Subject
 from kernel_patches_daemon.stats import HistogramMetricTimer
+from kernel_patches_daemon.status import (
+    gh_conclusion_to_status,
+    process_statuses,
+    Status,
+)
 from kernel_patches_daemon.utils import redact_url, remove_unsafe_chars
 from opentelemetry import metrics
 from pyre_extensions import none_throws
@@ -113,52 +118,6 @@ changes.
 
 [0] {github_actions_url}\
 """
-
-
-class Status(Enum):
-    SKIPPED = "skipped"
-    SUCCESS = "success"
-    FAILURE = "failure"
-    CONFLICT = "conflict"
-
-
-def gh_conclusion_to_status(gh_conclusion: str) -> Status:
-    """Translate a GitHub conclusion to our `Status` enum."""
-    # See
-    # https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite
-    # for a list of conclusions.
-    if gh_conclusion in (
-        "failure",
-        "timed_out",
-        "action_required",
-        "startup_failure",
-        "stale",
-    ):
-        return Status.FAILURE
-
-    # A "success" overwrites any skips, as the latter are effectively
-    # neutral.
-    if gh_conclusion in ("success",):
-        return Status.SUCCESS
-
-    return Status.SKIPPED
-
-
-def process_statuses(statuses: Iterator[Status]) -> Status:
-    """Boil down a set of `Status` objects into a single one."""
-    final = Status.SKIPPED
-    for status in statuses:
-        if status == Status.FAILURE:
-            # "failure" is sticky.
-            final = status
-            break
-        elif status == Status.SUCCESS:
-            final = status
-        else:
-            # We ignore anything classified as `Skipped`, as that's the
-            # starting state and we treat it as "neutral".
-            pass
-    return final
 
 
 class StatusLabelSuffixes(Enum):
