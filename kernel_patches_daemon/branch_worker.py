@@ -918,6 +918,8 @@ class BranchWorker(GithubConnector):
             statuses.append(gh_conclusion_to_status(run.conclusion))
             jobs += run.jobs()
 
+        # pyre-fixme[6]: For 1st argument expected `Iterator[Status]` but got
+        #  `List[Status]`.
         status = process_statuses(statuses)
         # In order to keep PW contexts somewhat deterministic, we sort the array
         # of jobs by name and later use the index of the test in the array to
