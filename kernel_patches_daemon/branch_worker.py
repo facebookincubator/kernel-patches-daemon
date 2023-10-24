@@ -897,12 +897,12 @@ class BranchWorker(GithubConnector):
         ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
         if _is_pr_flagged(pr):
             await series.set_check(
-                status=Status.FAILURE,
+                status=Status.CONFLICT,
                 target_url=pr.html_url,
                 context=f"{ctx}-PR",
                 description=MERGE_CONFLICT_LABEL,
             )
-            await self.evaluate_ci_result(series, pr)
+            await self.evaluate_ci_result(Status.CONFLICT, series, pr)
             return
 
         logger.info(f"Fetching workflow runs for {pr.number}: {pr.head.ref}")
@@ -951,35 +951,19 @@ class BranchWorker(GithubConnector):
         ]
         await asyncio.gather(*tasks)
 
-        await self.evaluate_ci_result(series, pr, jobs)
+        await self.evaluate_ci_result(status, series, pr)
 
-    async def evaluate_ci_result(self, series: Series, pr: PullRequest, vmtests=None):
+    async def evaluate_ci_result(
+        self, status: Status, series: Series, pr: PullRequest
+    ) -> None:
         """Evaluate the result of a CI run and send an email as necessary."""
         email = self.email
         if email is None:
             logger.info("No email configuration present; skipping sending...")
             return
 
-        if vmtests is None:
-            # Should only be called with `vmtests` being `None` on merge conflict.
-            assert _is_pr_flagged(pr)
-            status = Status.CONFLICT
-        else:
-            if any((vmtest.conclusion is None for vmtest in vmtests)):
-                # Not all tests are complete yet. Too early to evaluate.
-                return
-
-            # Boil down the GitHub conclusion to either "success", "failure", or
-            # "skipped". The GitHub reported "check suite" conclusion is bogus. We
-            # look at individual run results.
-            statuses = (
-                gh_conclusion_to_status(vmtest.conclusion) for vmtest in vmtests
-            )
-            status = process_statuses(statuses)
-            # There were no successes and no failures. Guess we don't do anything
-            # then.
-            if status == Status.SKIPPED:
-                return
+        if status in (Status.PENDING, Status.SKIPPED):
+            return
 
         if status == Status.SUCCESS:
             new_label = StatusLabelSuffixes.PASS.to_label(series.version)

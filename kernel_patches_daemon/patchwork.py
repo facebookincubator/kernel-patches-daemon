@@ -55,11 +55,12 @@ IRRELEVANT_STATES: Dict[str, int] = {
 }
 
 PW_CHECK_PENDING_STATES: Dict[Status, str] = {
-    Status.SKIPPED: "pending",
+    Status.PENDING: "pending",
 }
 
 PW_CHECK_CONCLUSIVE_STATES: Dict[Status, str] = {
     Status.SUCCESS: "success",
+    Status.SKIPPED: "success",
     Status.FAILURE: "fail",
     Status.CONFLICT: "fail",
 }
@@ -630,7 +631,7 @@ class Patchwork:
     async def post_check_for_patch_id(
         self, patch_id: int, status: Status, check_data: Dict[str, Any]
     ) -> Optional[aiohttp.ClientResponse]:
-        new_state = PW_CHECK_STATES.get(status, PW_CHECK_STATES[Status.SKIPPED])
+        new_state = PW_CHECK_STATES.get(status, PW_CHECK_STATES[Status.PENDING])
         updated_check_data = {
             **check_data,
             "state": new_state,

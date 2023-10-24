@@ -10,6 +10,7 @@ from typing import Iterator, Optional
 
 class Status(Enum):
     SKIPPED = "skipped"
+    PENDING = "pending"
     SUCCESS = "success"
     FAILURE = "failure"
     CONFLICT = "conflict"
@@ -19,7 +20,7 @@ def gh_conclusion_to_status(gh_conclusion: Optional[str]) -> Status:
     """Translate a GitHub conclusion to our `Status` enum."""
     # GitHub reports pending jobs with a `None` conclusion.
     if gh_conclusion is None:
-        return Status.SKIPPED
+        return Status.PENDING
 
     # See
     # https://docs.github.com/en/rest/checks/suites?apiVersion=2022-11-28#get-a-check-suite
@@ -48,8 +49,11 @@ def process_statuses(statuses: Iterator[Status]) -> Status:
         if status == Status.FAILURE:
             # "failure" is sticky.
             return status
-        elif status == Status.SUCCESS:
+        elif status == Status.PENDING:
             final = status
+        elif status == Status.SUCCESS:
+            if final != Status.PENDING:
+                final = status
         else:
             # We ignore anything classified as `Skipped`, as that's the
             # starting state and we treat it as "neutral".

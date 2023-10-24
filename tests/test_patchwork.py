@@ -428,7 +428,7 @@ class TestSeries(PatchworkTestCase):
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
             context=DEFAULT_CHECK_CTX,
-            status=Status.SKIPPED,
+            status=Status.PENDING,
             target_url="https://127.0.0.1:0/target",
         )
         # Hack... aioresponses stores the requests that were made in a dictionary whose's key is a tuple,
@@ -467,7 +467,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.PENDING, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
@@ -507,7 +507,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.PENDING, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
@@ -588,7 +588,7 @@ class TestSeries(PatchworkTestCase):
 
         series = await self._pw.get_series_by_id(665)
         await series.set_check(
-            context=DEFAULT_CHECK_CTX, status=Status.SKIPPED, target_url=TARGET_URL
+            context=DEFAULT_CHECK_CTX, status=Status.PENDING, target_url=TARGET_URL
         )
         # First patch is not updates
         self.assertEqual(
