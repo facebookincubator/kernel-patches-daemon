@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from enum import Enum
-from typing import Iterator, Optional
+from typing import Iterable, Optional
 
 
 class Status(Enum):
@@ -45,7 +45,7 @@ def gh_conclusion_to_status(gh_conclusion: Optional[str]) -> Status:
     return Status.SKIPPED
 
 
-def process_statuses(statuses: Iterator[Status]) -> Status:
+def process_statuses(statuses: Iterable[Status]) -> Status:
     """Boil down a set of `Status` objects into a single one."""
     final = Status.SKIPPED
     for status in statuses:
