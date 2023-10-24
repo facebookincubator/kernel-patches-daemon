@@ -34,6 +34,9 @@ def gh_conclusion_to_status(gh_conclusion: Optional[str]) -> Status:
     ):
         return Status.FAILURE
 
+    if gh_conclusion in ("cancelled",):
+        return Status.PENDING
+
     # A "success" overwrites any skips, as the latter are effectively
     # neutral.
     if gh_conclusion in ("success",):

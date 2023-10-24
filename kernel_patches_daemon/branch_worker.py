@@ -917,8 +917,27 @@ class BranchWorker(GithubConnector):
             actor=self.user_login,
             head_sha=pr.head.sha,
         ):
-            statuses.append(gh_conclusion_to_status(run.conclusion))
-            jobs += run.jobs()
+            status = gh_conclusion_to_status(run.conclusion)
+            run_jobs = run.jobs()
+
+            # Cancellation of individual jobs may not be reflected correctly in
+            # the overall workflow status all the time, but just be indicated as
+            # failure. Hence, look at job results to potentially overwrite
+            # status.
+            if status == Status.FAILURE:
+                for job in run_jobs:
+                    for step in job.steps:
+                        # In our world cancellation is assumed to originate with KPD
+                        # due to a force push. We do *not* want to report that as
+                        # failure, as everything will be retried.
+                        if step.conclusion == "cancelled":
+                            logger.info(
+                                f"Step {step.name} of {run} is canceled; marking workflow as pending"
+                            )
+                            status = Status.PENDING
+
+            statuses.append(status)
+            jobs += run_jobs
 
         # pyre-fixme[6]: For 1st argument expected `Iterator[Status]` but got
         #  `List[Status]`.
@@ -928,7 +947,7 @@ class BranchWorker(GithubConnector):
         # generate the context name.
         jobs = sorted(jobs, key=lambda job: job.name)
         jobs_logs = [
-            f"{gh_conclusion_to_status(job.conclusion)} ({job.html_url})"
+            f"{job.conclusion} -> {gh_conclusion_to_status(job.conclusion)} ({job.html_url})"
             for job in jobs
         ]
 
