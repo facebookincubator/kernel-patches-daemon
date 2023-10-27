@@ -920,21 +920,27 @@ class BranchWorker(GithubConnector):
             status = gh_conclusion_to_status(run.conclusion)
             run_jobs = run.jobs()
 
-            # Cancellation of individual jobs may not be reflected correctly in
-            # the overall workflow status all the time, but just be indicated as
-            # failure. Hence, look at job results to potentially overwrite
-            # status.
+            # Overall run failure could have many reasons, including
+            # infrastructure issues or an in-progress rebase. Make an attempt at
+            # detecting those. To reduce the number of failures we report
+            # prematurely (runs will be retried eventually).
             if status == Status.FAILURE:
                 for job in run_jobs:
                     for step in job.steps:
-                        # In our world cancellation is assumed to originate with KPD
-                        # due to a force push. We do *not* want to report that as
-                        # failure, as everything will be retried.
-                        if step.conclusion == "cancelled":
+                        # If a step has no conclusion but the overall run is
+                        # failed, the workflow was likely interrupted
+                        # prematurely and never got a chance to finish (e.g.,
+                        # because the runner died). Do not report failure, as we
+                        # shall retry eventually.
+                        # Similarly, if KPD does a force push because the
+                        # upstream baseline changed we map that to pending. The
+                        # run will be retried.
+                        if step.conclusion is None or step.conclusion == "cancelled":
                             logger.info(
-                                f"Step {step.name} of {run} is canceled; marking workflow as pending"
+                                f"Step {step.name} of {run} was interrupted/canceled; marking workflow as pending"
                             )
                             status = Status.PENDING
+                            break
 
             statuses.append(status)
             jobs += run_jobs
