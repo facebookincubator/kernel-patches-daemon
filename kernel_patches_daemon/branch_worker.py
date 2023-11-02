@@ -893,6 +893,9 @@ class BranchWorker(GithubConnector):
         return f"{await subject.branch}{HEAD_BASE_SEPARATOR}{self.repo_branch}"
 
     async def sync_checks(self, pr: PullRequest, series: Series) -> None:
+        # Make sure that we are working with up-to-date data (as opposed to
+        # cached state).
+        pr.update()
         # if it's merge conflict - report failure
         ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
         if _is_pr_flagged(pr):
