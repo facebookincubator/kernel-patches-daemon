@@ -139,8 +139,7 @@ class GithubSync(Stats):
         # Remove matching PRs from other workers
         for pr_to_close in prs_to_close:
             logging.info(
-                f"Closing existing pull request #{pr_to_close.number}, "
-                f"replaced with #{pr.number}"
+                f"Closing existing pull request {pr_to_close}, replaced with {pr}"
             )
             pr_to_close.edit(state="close")
 
@@ -224,7 +223,7 @@ class GithubSync(Stats):
                     continue
                 assert pr is not None
                 logging.info(
-                    f"Created/updated PR {pr.number}({pr.head.ref}): {pr.url} for series {series.id}"
+                    f"Created/updated {pr} ({pr.head.ref}): {pr.url} for series {series.id}"
                 )
                 await worker.sync_checks(pr, series)
                 # Close out other PRs if exists
@@ -249,7 +248,7 @@ class GithubSync(Stats):
                     subject = self.pw.get_subject_by_series(series)
                     if subject_name != subject.subject:
                         logger.warning(
-                            f"Renaming PR {pr.number} from {subject_name} to {subject.subject} according to {series.id}"
+                            f"Renaming {pr} from {subject_name} to {subject.subject} according to {series.id}"
                         )
                         pr.edit(title=subject.subject)
                     branch_name = f"{await subject.branch}{HEAD_BASE_SEPARATOR}{worker.repo_branch}"

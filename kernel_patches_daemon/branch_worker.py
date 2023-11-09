@@ -416,7 +416,7 @@ class BranchWorker(GithubConnector):
             emsg = e.data.get("message")
             if emsg is not None and emsg in KNOWN_OK_COMMENT_EXCEPTIONS:
                 logger.warning(
-                    f"Expected exception while adding a comment to PR {pr.id}: {emsg}"
+                    f"Expected exception while adding a comment to {pr}: {emsg}"
                 )
             else:
                 raise e
@@ -629,7 +629,7 @@ class BranchWorker(GithubConnector):
                     self.prs[pr.title] = pr
                 except GithubException:
                     logger.warning(
-                        f"Error re-opening PR {pr.id}, treating PR as non-exists.",
+                        f"Error re-opening {pr}, treating PR as non-exists.",
                         exc_info=True,
                     )
                     pr = None
@@ -692,7 +692,7 @@ class BranchWorker(GithubConnector):
                 pr_closed.add(1)
                 if await series.is_expired():
                     pr_closed.add(1, {"reason": "expired"})
-                logger.warning(f"Closing PR {pr.number}: {pr.head.ref}")
+                logger.warning(f"Closing {pr}: {pr.head.ref}")
                 self._close_pr(pr)
         return pr
 
@@ -908,7 +908,7 @@ class BranchWorker(GithubConnector):
             await self.evaluate_ci_result(Status.CONFLICT, series, pr)
             return
 
-        logger.info(f"Fetching workflow runs for {pr.number}: {pr.head.ref}")
+        logger.info(f"Fetching workflow runs for {pr}: {pr.head.ref} (@ {pr.head.sha})")
 
         statuses: List[Status] = []
         jobs = []
@@ -1009,7 +1009,7 @@ class BranchWorker(GithubConnector):
         # whatever.
         if not_label in labels:
             logger.info(
-                f"PR {pr.number} {pr.title} was previously {not_label} and "
+                f"{pr} was previously {not_label} and "
                 f"is now {new_label}; removing {not_label} label"
             )
             pr.remove_from_labels(not_label)
@@ -1018,7 +1018,7 @@ class BranchWorker(GithubConnector):
             # Either this is the first run we had for this patch version (no
             # label was there) or we switched states (pass <-> fail). Either
             # way, send an email notifying the submitter.
-            logger.info(f"PR {pr.number} {pr.title} is now {new_label}; adding label")
+            logger.info(f"{pr} is now {new_label}; adding label")
             pr.add_to_labels(new_label)
             await send_email(email, series, subject, body)
 
