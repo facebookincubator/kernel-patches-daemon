@@ -79,7 +79,7 @@ EMAIL_TEMPLATE_BASE: Final[
 Dear BPF patch submitter,
 
 [{status}] Your Patchwork submission
-{pw_series_name} [1]
+{submission_name} [1]
 {body}
 [1] {pw_series_url}
 
@@ -189,7 +189,7 @@ def furnish_ci_email_body(
 
     return EMAIL_TEMPLATE_BASE.format(
         status=str(status.value).upper(),
-        pw_series_name=series.name,
+        submission_name=get_ci_base(series)["name"],
         pw_series_url=series.web_url + "&state=*",
         body=body,
     )
