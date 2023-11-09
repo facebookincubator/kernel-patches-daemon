@@ -145,6 +145,16 @@ class NewPRWithNoChangeException(Exception):
         )
 
 
+def get_ci_base(series: Series) -> Dict:
+    """Retrieve the object (cover letter or patch) that we use as the base for
+    sending emails in response to.
+    """
+    if series.cover_letter is not None:
+        return series.cover_letter
+    else:
+        return series.patches[-1]
+
+
 def get_github_actions_url(repo: Repository, pr: PullRequest, status: Status) -> str:
     """Find a URL representing a GitHub Actions run for the given pull
     request with the given status.
@@ -228,10 +238,7 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
     # actual host name either. Collisions of a sha256 hash are assumed to be
     # unlikely in many contexts, so we do the same.
     msg["Message-Id"] = f"<{generate_msg_id(config.smtp_host)}>"
-    if series.cover_letter is not None:
-        msg["In-Reply-To"] = f"{series.cover_letter['msgid']}"
-    else:
-        msg["In-Reply-To"] = f"{series.patches[-1]['msgid']}"
+    msg["In-Reply-To"] = get_ci_base(series)["msgid"]
     msg["References"] = msg["In-Reply-To"]
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
