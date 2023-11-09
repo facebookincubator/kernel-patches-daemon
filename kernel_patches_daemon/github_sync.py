@@ -216,12 +216,16 @@ class GithubSync(Stats):
                 try:
                     self.increment_counter("all_known_subjects")
                     pr = await worker.checkout_and_patch(pr_branch_name, series)
+                    if pr is None:
+                        logging.info(
+                            "PR associated with branch {pr_branch_name} for series {series.id} is closed; ignoring"
+                        )
+                        continue
                 except NewPRWithNoChangeException:
                     self.increment_counter("empty_pr")
                     logger.exception("Could not create PR with no changes")
-
                     continue
-                assert pr is not None
+
                 logging.info(
                     f"Created/updated {pr} ({pr.head.ref}): {pr.url} for series {series.id}"
                 )
