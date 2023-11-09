@@ -6,6 +6,9 @@
 
 import asyncio
 import copy
+import email
+import email.parser
+import email.policy
 import hashlib
 import logging
 import os
@@ -171,6 +174,15 @@ def get_github_actions_url(repo: Repository, pr: PullRequest, status: Status) ->
             break
 
     return github_actions_url
+
+
+async def get_ci_email_subject(series: Series) -> str:
+    """Get the subject to use for a CI email pertaining the given series."""
+    obj = get_ci_base(series)
+    patch = await series.pw_client.get_blob(obj["mbox"])
+    parser = email.parser.BytesParser(policy=email.policy.default)
+    msg = parser.parsebytes(patch, headersonly=True)
+    return f"Re: {msg.get('subject', series.name)}"
 
 
 def furnish_ci_email_body(
@@ -1001,13 +1013,12 @@ class BranchWorker(GithubConnector):
         if status == Status.SUCCESS:
             new_label = StatusLabelSuffixes.PASS.to_label(series.version)
             not_label = StatusLabelSuffixes.FAIL.to_label(series.version)
-            subject = f"BPF CI -- success ({series.name})"
         else:
             assert status in (Status.FAILURE, Status.CONFLICT), status
             new_label = StatusLabelSuffixes.FAIL.to_label(series.version)
             not_label = StatusLabelSuffixes.PASS.to_label(series.version)
-            subject = f"BPF CI -- failure ({series.name})"
 
+        subject = await get_ci_email_subject(series)
         body = furnish_ci_email_body(self.repo, pr, status, series)
 
         labels = {label.name for label in pr.labels}
