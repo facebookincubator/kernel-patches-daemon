@@ -231,7 +231,7 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
     if series.cover_letter is not None:
         msg["In-Reply-To"] = f"{series.cover_letter['msgid']}"
     else:
-        msg["In-Reply-To"] = f"{series.patches[0]['msgid']}"
+        msg["In-Reply-To"] = f"{series.patches[-1]['msgid']}"
     msg["References"] = msg["In-Reply-To"]
     msg["Subject"] = subject
     msg["From"] = config.smtp_from
