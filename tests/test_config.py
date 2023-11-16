@@ -61,6 +61,7 @@ class TestConfig(unittest.TestCase):
                     "email1-allow@example.com",
                     "email2-allow@example.com",
                 ],
+                ignore_allowlist=True,
             ),
             tag_to_branch_mapping={"tag": ["branch"]},
             branches={

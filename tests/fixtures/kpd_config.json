@@ -21,7 +21,8 @@
       "cc": ["email1-cc@example.com", "email2-cc@example.com"],
       "pass": "super-secret-is-king",
       "http_proxy": "http://example.com:8080",
-      "submitter_allowlist": ["email1-allow@example.com", "email2-allow@example.com"]
+      "submitter_allowlist": ["email1-allow@example.com", "email2-allow@example.com"],
+      "ignore_allowlist": true
     },
     "tag_to_branch_mapping": {
       "tag": [

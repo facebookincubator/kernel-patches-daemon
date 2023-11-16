@@ -114,6 +114,9 @@ class EmailConfig:
     # Once we send email notifications to all patch submitters it can be
     # removed.
     submitter_allowlist: Set[str]
+    # Ignore the `submitter_allowlist` entries and send emails to all patch
+    # submitters, unconditionally.
+    ignore_allowlist: bool
 
     @classmethod
     def from_json(cls, json: Dict) -> "EmailConfig":
@@ -127,6 +130,7 @@ class EmailConfig:
             smtp_cc=json.get("cc", []),
             smtp_http_proxy=json.get("http_proxy", None),
             submitter_allowlist=json.get("submitter_allowlist", set()),
+            ignore_allowlist=json.get("ignore_allowlist", False),
         )
 
 
