@@ -7,13 +7,14 @@
 import copy
 import unittest
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 from kernel_patches_daemon.config import KPDConfig
 from kernel_patches_daemon.github_sync import GithubSync
 
 TEST_BRANCH = "test-branch"
-TEST_CONFIG = {
+TEST_CONFIG: Dict[str, Any] = {
     "version": 3,
     "patchwork": {
         "project": "test",
@@ -36,7 +37,9 @@ TEST_CONFIG = {
 
 
 class GithubSyncMock(GithubSync):
-    def __init__(self, kpd_config=None, *args, **kwargs) -> None:
+    def __init__(
+        self, kpd_config: Optional[KPDConfig] = None, *args: Any, **kwargs: Any
+    ) -> None:
         if kpd_config is None:
             kpd_config = KPDConfig.from_json(TEST_CONFIG)
 
@@ -61,12 +64,12 @@ class TestGihubSync(unittest.TestCase):
 
         self._gh = GithubSyncMock()
 
-    def test_init_with_base_directory(self):
+    def test_init_with_base_directory(self) -> None:
         @dataclass
         class TestCase:
             name: str
             prefix: str
-            base_dir: str = None
+            base_dir: Optional[str] = None
 
         test_cases = [
             TestCase(

@@ -43,7 +43,7 @@ class PatchworkTestCase(unittest.IsolatedAsyncioTestCase):
 
 class TestPatchwork(PatchworkTestCase):
     @aioresponses()
-    async def test_get_wrapper(self, m) -> None:
+    async def test_get_wrapper(self, m: aioresponses) -> None:
         """
         Simple test to ensure that GET requests are properly mocked.
         """
@@ -57,7 +57,7 @@ class TestPatchwork(PatchworkTestCase):
         self.assertEqual(json_resp["key1"], "value1")
 
     @aioresponses()
-    async def test_post_wrapper(self, m) -> None:
+    async def test_post_wrapper(self, m: aioresponses) -> None:
         """
         Simple test to ensure that POST requests are properly mocked.
         """
@@ -171,7 +171,7 @@ class TestPatchwork(PatchworkTestCase):
                     )
 
     @aioresponses()
-    async def test_try_post_nocred_nomutation(self, m) -> None:
+    async def test_try_post_nocred_nomutation(self, m: aioresponses) -> None:
         """
         When pw_token is not set or is an empty string, we will not call post.
         """
@@ -263,7 +263,7 @@ class TestPatchwork(PatchworkTestCase):
 
 class TestSeries(PatchworkTestCase):
     @aioresponses()
-    async def test_series_closed(self, m) -> None:
+    async def test_series_closed(self, m: aioresponses) -> None:
         """
         If one of the patch is irrelevant, the series is closed.
         """
@@ -272,7 +272,7 @@ class TestSeries(PatchworkTestCase):
         self.assertTrue(await series.is_closed())
 
     @aioresponses()
-    async def test_series_not_closed(self, m) -> None:
+    async def test_series_not_closed(self, m: aioresponses) -> None:
         """
         If none of the patches are irrelevant, the series is not closed.
         """
@@ -281,7 +281,7 @@ class TestSeries(PatchworkTestCase):
         self.assertFalse(await series.is_closed())
 
     @aioresponses()
-    async def test_series_tags(self, m) -> None:
+    async def test_series_tags(self, m: aioresponses) -> None:
         """
         Series tags are extracted from the diffs/cover letter/serie's name. We extract the content
         from the square bracket content prefixing those names and filter some out.
@@ -309,7 +309,7 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_visible_tags(self, m) -> None:
+    async def test_series_visible_tags(self, m: aioresponses) -> None:
         """
         Series' visible tags are only taken from patch states and series version.
         """
@@ -327,7 +327,7 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_tags_handle_missing_values(self, m) -> None:
+    async def test_series_tags_handle_missing_values(self, m: aioresponses) -> None:
         """
         Test that we handle correctly series with empty cover_letter and/or no attaches patches.
         """
@@ -341,7 +341,7 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_is_expired(self, m) -> None:
+    async def test_series_is_expired(self, m: aioresponses) -> None:
         """
         Test that when we are passed expiration date, the series is reported expired.
         """
@@ -356,7 +356,7 @@ class TestSeries(PatchworkTestCase):
             self.assertTrue(await series.is_expired())
 
     @aioresponses()
-    async def test_series_is_not_expired(self, m) -> None:
+    async def test_series_is_not_expired(self, m: aioresponses) -> None:
         """
         Test that when we are not yet passed expiration date, the series is not reported expired.
         """
@@ -371,7 +371,7 @@ class TestSeries(PatchworkTestCase):
             self.assertFalse(await series.is_expired())
 
     @aioresponses()
-    async def test_get_latest_check_for_patch(self, m) -> None:
+    async def test_get_latest_check_for_patch(self, m: aioresponses) -> None:
         """
         Tests `get_latest_check_for_patch` function,
         which now makes a GET request with additional queries to ensure that
@@ -398,7 +398,7 @@ class TestSeries(PatchworkTestCase):
         self.assertEqual(check["id"], EXPECTED_ID)
 
     @aioresponses()
-    async def test_series_checks_update_all_diffs(self, m) -> None:
+    async def test_series_checks_update_all_diffs(self, m: aioresponses) -> None:
         """
         Test that we update all the diffs in a serie if there is either no existing check
         or checks need update.
@@ -437,7 +437,9 @@ class TestSeries(PatchworkTestCase):
         self.assertEqual(len([x for x in m.requests.keys() if x[0] == "POST"]), 3)
 
     @aioresponses()
-    async def test_series_checks_no_update_same_state_target(self, m) -> None:
+    async def test_series_checks_no_update_same_state_target(
+        self, m: aioresponses
+    ) -> None:
         """
         Test that we don't update checks if the state and target_url have not changed.
         """
@@ -476,7 +478,9 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_checks_update_same_state_diff_target(self, m) -> None:
+    async def test_series_checks_update_same_state_diff_target(
+        self, m: aioresponses
+    ) -> None:
         """
         Test that we update checks if the state is the same, but target_url has changed.
         """
@@ -515,7 +519,9 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_checks_update_diff_state_same_target(self, m) -> None:
+    async def test_series_checks_update_diff_state_same_target(
+        self, m: aioresponses
+    ) -> None:
         """
         Test that we update checks if the state is not the same, but target_url is.
         """
@@ -557,7 +563,9 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
-    async def test_series_checks_no_update_diff_pending_state(self, m) -> None:
+    async def test_series_checks_no_update_diff_pending_state(
+        self, m: aioresponses
+    ) -> None:
         """
         Test that we do not update checks if the new state is pending and we have an existing final state.
         """
@@ -600,7 +608,7 @@ class TestSeries(PatchworkTestCase):
 class TestSubject(PatchworkTestCase):
     @freeze_time(DEFAULT_FREEZE_DATE)
     @aioresponses()
-    async def test_relevant_series(self, m) -> None:
+    async def test_relevant_series(self, m: aioresponses) -> None:
         """
         Test that we find the relevant series for a given subject.
         """
@@ -619,7 +627,7 @@ class TestSubject(PatchworkTestCase):
 
     @freeze_time(DEFAULT_FREEZE_DATE)
     @aioresponses()
-    async def test_latest_series(self, m) -> None:
+    async def test_latest_series(self, m: aioresponses) -> None:
         """
         Test that latest_series only returns.... the latest serie.
         """
@@ -634,7 +642,7 @@ class TestSubject(PatchworkTestCase):
 
     @freeze_time(DEFAULT_FREEZE_DATE)
     @aioresponses()
-    async def test_branch_name(self, m) -> None:
+    async def test_branch_name(self, m: aioresponses) -> None:
         """
         Test that the branch name is made using the first series ID in the list of relevant series.
         """

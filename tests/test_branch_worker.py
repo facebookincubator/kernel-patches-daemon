@@ -8,7 +8,7 @@ import random
 import unittest
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 from aioresponses import aioresponses
@@ -21,7 +21,6 @@ from kernel_patches_daemon.branch_worker import (
     create_color_labels,
     has_same_base_different_remote,
     HEAD_BASE_SEPARATOR,
-    PullRequest,
     temporary_patch_file,
     UPSTREAM_REMOTE_NAME,
 )
@@ -46,7 +45,7 @@ TEST_CI_REPO_URL = f"https://user:pass@127.0.0.1:0/ci-org/{TEST_CI_REPO}"
 TEST_CI_BRANCH = "test_ci_branch"
 TEST_BASE_DIRECTORY = "/repos"
 TEST_BRANCH = "test-branch"
-TEST_CONFIG = {
+TEST_CONFIG: Dict[str, Any] = {
     "version": 2,
     "project": "test",
     "pw_url": "pw",
@@ -69,7 +68,7 @@ TEST_LABELS_CFG = {
     "RFC": "f2e318",
     "new": "c2e0c6",
 }
-SERIES_DATA = {
+SERIES_DATA: Dict[str, Any] = {
     "id": 0,
     "name": "foo",
     "date": "2010-07-20T01:00:00",
@@ -84,7 +83,7 @@ SERIES_DATA = {
 
 
 class BranchWorkerMock(BranchWorker):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         presets = {
             "patchwork": MagicMock(),
             "labels_cfg": TEST_LABELS_CFG,
@@ -327,24 +326,24 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         self._bw.user_or_org = user_login
 
         def make_munch(
-            head_user=user_login,
-            base_user=user_login,
-            base_ref=TEST_REPO_PR_BASE_BRANCH,
-            state="open",
-        ):
+            head_user: str = user_login,
+            base_user: str = user_login,
+            base_ref: str = TEST_REPO_PR_BASE_BRANCH,
+            state: str = "open",
+        ) -> Munch:
             """Helper to make a Munch that can be consumed as a PR (e.g accessing nested attributes)"""
             return munchify(
                 {
                     "head": {"user": {"login": head_user}},
                     "base": {"user": {"login": base_user}, "ref": base_ref},
                     "state": state,
-                }
+                },
             )
 
         @dataclass
         class TestCase:
             name: str
-            pr: PullRequest
+            pr: Munch
             relevant: bool
 
         test_cases = [
@@ -382,6 +381,8 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
         for case in test_cases:
             with self.subTest(msg=case.name):
+                # pyre-fixme: Incompatible parameter type [6]: In call `BranchWorker._is_relevant_pr`,
+                # for 1st positional argument, expected `PullRequest` but got `Munch`.
                 self.assertEqual(self._bw._is_relevant_pr(case.pr), case.relevant)
 
     def test_fetch_repo_path_doesnt_exist_full_sync(self) -> None:
@@ -478,7 +479,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         for case in test_cases:
             with self.subTest(msg=case.name):
                 self._bw.branches = case.branches
-                self._bw.all_prs = case.all_prs
+                self._bw.all_prs = {p: {} for p in case.all_prs}
                 with patch.object(self._bw, "filter_closed_pr") as fcp, patch.object(
                     self._bw, "delete_branch"
                 ) as db, freeze_time(not_expired_time):
@@ -502,11 +503,11 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         base_datetime = datetime.fromtimestamp(base_time)
 
         def make_munch(
-            head_ref="test",
-            state="closed",
-            updated_at=base_datetime,
-            title="title",
-        ):
+            head_ref: str = "test",
+            state: str = "closed",
+            updated_at: datetime = base_datetime,
+            title: str = "title",
+        ) -> Munch:
             """Helper to make a Munch that can be consumed as a PR (e.g accessing nested attributes)"""
             return munchify(
                 {
@@ -586,7 +587,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             ggr.return_value.delete.assert_called_once()
 
     @aioresponses()
-    async def test_guess_pr_return_from_active_pr_cache(self, m) -> None:
+    async def test_guess_pr_return_from_active_pr_cache(self, m: aioresponses) -> None:
         # Whatever is in our self.prs's cache dictionary will be returned.
         series = Series(self._pw, SERIES_DATA)
         sentinel = random.random()
@@ -611,7 +612,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_return_from_secondary_cache_without_specified_branch(
-        self, m
+        self, m: aioresponses
     ) -> None:
         init_pw_responses(m, DEFAULT_TEST_RESPONSES)
         # After self.prs, we will look into self.all_prs
@@ -628,7 +629,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_not_in_cache_no_specified_branch_no_remote_branch(
-        self, m
+        self, m: aioresponses
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
@@ -652,7 +653,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v1(
-        self, m
+        self, m: aioresponses
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
@@ -668,7 +669,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
         series = Series(self._pw, {**SERIES_DATA, "version": 1})
         mybranch = await self._bw.subject_to_branch(Subject(series.subject, self._pw))
-        self._bw.branches = "aaa"
+        self._bw.branches = ["aaa"]
         pr = await self._bw._guess_pr(series, mybranch)
 
         # branch is an active remote branch, our series version is v1. We look up closed
@@ -678,7 +679,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_not_in_cache_no_specified_branch_has_remote_branch_v2_first_series(
-        self, m
+        self, m: aioresponses
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
@@ -705,7 +706,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_noclosed_pr(
-        self, m
+        self, m: aioresponses
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)
@@ -736,7 +737,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
     @aioresponses()
     async def test_guess_pr_not_in_cache_no_specified_branch_is_remote_branch_v2_multiple_series_with_closed_pr(
-        self, m
+        self, m: aioresponses
     ) -> None:
         """
         Handling of series which is not in our PR cache (self.prs, self.all_prs empty)

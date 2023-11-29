@@ -7,7 +7,7 @@
 import datetime
 import unittest
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, List, Optional
 from unittest.mock import MagicMock, patch
 
 import freezegun
@@ -30,7 +30,7 @@ from kernel_patches_daemon.github_connector import (
 # unfortunately, this has the side effect of not freezing the time for the github
 # package... Here we are popping anything that could get in the way from the dfault list
 # https://github.com/spulec/freezegun/issues/484
-default_ignore_list = [
+default_ignore_list: List[str] = [
     x for x in freezegun.config.DEFAULT_IGNORE_LIST if not "github".startswith(x)
 ]
 # pyre-fixme[16]: Module freezegun has no attribute configure
@@ -43,7 +43,7 @@ TEST_REPO = "repo"
 TEST_REPO_URL = f"https://user:pass@127.0.0.1:0/{TEST_ORG}/{TEST_REPO}"
 TEST_APP_ID = 1
 TEST_INSTALLATION_ID = 2
-TEST_PRIV_KEY = (
+TEST_PRIV_KEY: str = (
     rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -58,7 +58,7 @@ TEST_PRIV_KEY = (
 
 
 class GithubConnectorMock(GithubConnector):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         presets = {
             "repo_url": TEST_REPO_URL,
         }
@@ -71,7 +71,7 @@ def get_default_gc_oauth_client() -> GithubConnectorMock:
     return GithubConnectorMock(github_oauth_token="random_gh_oauth_token")
 
 
-def get_default_gc_app_auth_client(**kwargs) -> GithubConnectorMock:
+def get_default_gc_app_auth_client(**kwargs: Any) -> GithubConnectorMock:
     presets = {
         "app_auth": AppInstallationAuth(
             AppAuth(app_id=TEST_APP_ID, private_key=TEST_PRIV_KEY),

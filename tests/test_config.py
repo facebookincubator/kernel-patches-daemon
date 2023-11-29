@@ -7,7 +7,7 @@
 import json
 import os
 import unittest
-from typing import Dict
+from typing import Dict, Union
 from unittest.mock import mock_open, patch
 
 from kernel_patches_daemon.config import (
@@ -19,7 +19,7 @@ from kernel_patches_daemon.config import (
 )
 
 
-def read_fixture(filepath: str) -> Dict:
+def read_fixture(filepath: str) -> Dict[str, Union[str, int, bool]]:
     with open(os.path.join(os.path.dirname(__file__), filepath)) as f:
         return json.load(f)
 
