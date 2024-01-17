@@ -227,6 +227,7 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
         config.smtp_from,
         "--user",
         f"{config.smtp_user}:{config.smtp_pass}",
+        "--crlf",
         "--upload-file",
         "-",
     ]
