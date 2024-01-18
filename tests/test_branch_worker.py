@@ -324,8 +324,10 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
 
         # Set our user login name
         self._bw.user_or_org = user_login
+        self._bw.user_login = user_login
 
         def make_munch(
+            user: str = user_login,
             head_user: str = user_login,
             base_user: str = user_login,
             base_ref: str = TEST_REPO_PR_BASE_BRANCH,
@@ -334,6 +336,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             """Helper to make a Munch that can be consumed as a PR (e.g accessing nested attributes)"""
             return munchify(
                 {
+                    "user": {"login": user},
                     "head": {"user": {"login": head_user}},
                     "base": {"user": {"login": base_user}, "ref": base_ref},
                     "state": state,
@@ -351,6 +354,11 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
                 name="Relevant PR",
                 pr=make_munch(),
                 relevant=True,
+            ),
+            TestCase(
+                name="Wrong user",
+                pr=make_munch(user="bar"),
+                relevant=False,
             ),
             TestCase(
                 name="Wrong head user",

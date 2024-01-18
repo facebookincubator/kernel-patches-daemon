@@ -876,11 +876,13 @@ class BranchWorker(GithubConnector):
         """
         src_user = none_throws(pr.head.user).login
         tgt_user = none_throws(pr.base.user).login
+        pr_user = none_throws(pr.user).login
         tgt_branch = pr.base.ref
         state = pr.state
         if (
             src_user == self.user_or_org
             and tgt_user == self.user_or_org
+            and pr_user == self.user_login
             and tgt_branch == self.repo_pr_base_branch
             and state == "open"
         ):
