@@ -599,6 +599,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         # Whatever is in our self.prs's cache dictionary will be returned.
         series = Series(self._pw, SERIES_DATA)
         sentinel = random.random()
+        # pyre-fixme[6]: For 2nd argument expected `PullRequest` but got `float`.
         self._bw.prs["foo"] = sentinel
         pr = await self._bw._guess_pr(series)
         self.assertEqual(sentinel, pr)
