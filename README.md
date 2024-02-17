@@ -37,7 +37,7 @@ python -m venv .venv
 poetry install
 
 # Test
-poetry run python -m unittests
+poetry run python -m unittest
 ```
 
 ## Running
