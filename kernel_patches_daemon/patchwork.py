@@ -94,6 +94,7 @@ err_malformed_series: metrics.Counter = meter.create_counter(
     name="errors.malformed_series"
 )
 
+
 ## Request Tracing
 class TraceContext(SimpleNamespace):
     """

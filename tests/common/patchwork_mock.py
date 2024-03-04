@@ -19,9 +19,9 @@ from kernel_patches_daemon.patchwork import (
 )
 
 DEFAULT_CHECK_CTX: Final[str] = "some_context"
-DEFAULT_CHECK_CTX_QUERY: Final[
-    str
-] = f"?context={DEFAULT_CHECK_CTX}&order=-date&per_page=1"
+DEFAULT_CHECK_CTX_QUERY: Final[str] = (
+    f"?context={DEFAULT_CHECK_CTX}&order=-date&per_page=1"
+)
 PROJECT: Final[int] = 1234
 DELEGATE: Final[int] = 12345
 

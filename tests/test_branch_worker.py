@@ -279,6 +279,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         """
         If the remote is set correctly, we don't modify it.
         """
+
         # A fake remote
         @dataclass
         class R:
