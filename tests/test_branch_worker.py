@@ -7,17 +7,23 @@
 # pyre-unsafe
 
 import random
+import shutil
+import tempfile
 import unittest
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
+import git
+
 from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from git.exc import GitCommandError
 from kernel_patches_daemon.branch_worker import (
+    _series_already_applied,
+    ALREADY_MERGED_LOOKBACK,
     BRANCH_TTL,
     BranchWorker,
     create_color_labels,
@@ -863,3 +869,91 @@ class TestSupportFunctions(unittest.TestCase):
                     "base=>remote", "other_base=>other_remote"
                 )
             )
+
+
+class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.repo = git.Repo.init(self.tmp_dir)
+
+        # Create a file in the repository
+        with open(self.tmp_dir + "/file.txt", "w") as f:
+            f.write("Hello, world!")
+
+        # So that test cases know they have at least 100 values to pick from
+        self.assertGreaterEqual(ALREADY_MERGED_LOOKBACK, 100)
+
+        # Add some dummy commits.
+        # Note despite file.txt not changing, this still creates commits.
+        for i in range(1, 2 * ALREADY_MERGED_LOOKBACK + 1):
+            self.repo.index.add(["file.txt"])
+            self.repo.index.commit(f"{i}\n\nThis commit body should never match")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir)
+
+    async def asyncSetUp(self):
+        # Patchwork client
+        self._pw = get_default_pw_client()
+
+    async def _get_series(self, m: aioresponses, summaries: List[str]) -> Series:
+        """
+        Given a list of commit summaries, return a `Series` that
+        contains such commits.
+        """
+        data = {
+            "https://127.0.0.1:0/api/1.1/series/42/": {
+                "id": 42,
+                "name": "[a/b] this series is *NOT* closed!",
+                "date": "2010-07-20T01:00:00",
+                "patches": [{"id": i} for i in range(len(summaries))],
+                "cover_letter": {"name": "[tag] cover letter name"},
+                "version": 4,
+                "url": "https://example.com",
+                "web_url": "https://example.com",
+                "submitter": {"email": "a-user@example.com"},
+                "mbox": "https://example.com",
+            },
+            **{
+                f"https://127.0.0.1:0/api/1.1/patches/{i}/": {
+                    "id": i,
+                    "project": {"id": "1234"},
+                    "delegate": {"id": "12345"},
+                    "archived": False,
+                    "state": "new",
+                    "name": summaries[i],
+                }
+                for i in range(len(summaries))
+            },
+        }
+
+        init_pw_responses(m, data)
+        series = await self._pw.get_series_by_id(42)
+
+        return series
+
+    @aioresponses()
+    async def test_applied_all(self, m: aioresponses):
+        in_1 = ALREADY_MERGED_LOOKBACK + 33
+        in_2 = ALREADY_MERGED_LOOKBACK + 34
+        series = await self._get_series(m, [f"{in_1}", f"[tag] {in_2}"])
+        self.assertTrue(await _series_already_applied(self.repo, series))
+
+    @aioresponses()
+    async def test_applied_none_newer(self, m: aioresponses):
+        out_1 = ALREADY_MERGED_LOOKBACK * 2 + 2
+        out_2 = ALREADY_MERGED_LOOKBACK * 2 + 3
+        series = await self._get_series(m, [f"[some tags]{out_1}", f"[tag] {out_2}"])
+        self.assertFalse(await _series_already_applied(self.repo, series))
+
+    @aioresponses()
+    async def test_applied_none_older(self, m: aioresponses):
+        series = await self._get_series(m, ["[some tags]33", "[tag] 34"])
+        self.assertFalse(await _series_already_applied(self.repo, series))
+
+    @aioresponses()
+    async def test_applied_some(self, m: aioresponses):
+        inside = ALREADY_MERGED_LOOKBACK + 55
+        out = ALREADY_MERGED_LOOKBACK * 3
+        series = await self._get_series(m, [str(inside), str(out)])
+        self.assertFalse(await _series_already_applied(self.repo, series))

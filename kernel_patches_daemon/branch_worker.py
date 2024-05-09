@@ -64,6 +64,10 @@ pr_merge_conflict: metrics.Counter = meter.create_counter(
 branch_deleted: metrics.Counter = meter.create_counter(name="branches.deleted")
 errors: metrics.Counter = meter.create_counter(name="errors")
 
+# Since under normal conditions the race is quite small, the last
+# 100 commits should be sufficient. We could always increase the
+# count but it would slow down normal operation more.
+ALREADY_MERGED_LOOKBACK = 100
 BRANCH_TTL = 172800  # 1 week
 PULL_REQUEST_TTL = timedelta(days=7)
 HEAD_BASE_SEPARATOR = "=>"
@@ -350,6 +354,28 @@ def _reset_repo(repo, branch: str) -> None:
 
     repo.git.reset("--hard", branch)
     repo.git.checkout(branch)
+
+
+async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
+    """
+    Returns whether or not the given series has already been applied
+    to the active branch on `repo`.
+
+    Note we are only checking the commit summaries. We have to be
+    conservative b/c the commit messages will have trailers attached
+    upon merge. And we cannot check the commit diff b/c maintainers
+    could have applied a fixup.
+    """
+    try:
+        summaries = {
+            commit.summary
+            for commit in repo.iter_commits(max_count=ALREADY_MERGED_LOOKBACK)
+        }
+    except git.exc.GitCommandError:
+        logger.exception("Failed to check series application status")
+        return False
+
+    return all(ps in summaries for ps in await series.patch_subjects())
 
 
 def _is_outdated_pr(pr: PullRequest) -> bool:
@@ -793,6 +819,15 @@ class BranchWorker(GithubConnector):
         )
         success, e, conflict = await self.try_apply_mailbox_series(branch_name, series)
         if not success:
+            # The upstream git repo could have raced with patchwork.
+            #
+            # In other words, patchwork could be reporting a relevant
+            # status (ie. !accepted) while the series has already been
+            # merged and pushed.
+            if await _series_already_applied(self.repo_local, series):
+                logger.info(f"Series {series.url} already applied to tree")
+                raise NewPRWithNoChangeException(self.repo_pr_base_branch, branch_name)
+
             comment = (
                 f"{comment}\nPull request is *NOT* updated. Failed to apply {series.web_url}\n"
                 f"error message:\n```\n{e}\n```\n\n"
