@@ -343,6 +343,25 @@ class TestSeries(PatchworkTestCase):
         )
 
     @aioresponses()
+    async def test_series_patch_subjects(self, m: aioresponses) -> None:
+        """
+        Series patch subjects are extracted from all the non-cover letter patches in a series.
+
+        Series tags are extracted from the diffs/cover letter/serie's name. We extract the content
+        from the square bracket content prefixing those names and filter some out.
+        """
+        init_pw_responses(m, DEFAULT_TEST_RESPONSES)
+        series = await self._pw.get_series_by_id(665)
+        self.assertEqual(
+            await series.patch_subjects(),
+            [
+                "foo",
+                "bar",
+                "foo",
+            ],
+        )
+
+    @aioresponses()
     async def test_series_is_expired(self, m: aioresponses) -> None:
         """
         Test that when we are passed expiration date, the series is reported expired.

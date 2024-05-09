@@ -223,6 +223,15 @@ def parse_tags(input: str) -> Set[str]:
     return filtered_tags
 
 
+def parse_subject(input: str) -> str:
+    try:
+        logging.debug(f"Parsing subject name from '{input}' patch name")
+        return none_throws(re.match(SUBJECT_REGEXP, input)).group("name")
+    except Exception as ex:
+        logger.error(f"Failed to parse subject from patch name '{input}': {ex}")
+        return ""
+
+
 # An asyncio compatible cachetools.cached method.
 # https://github.com/tkem/cachetools/issues/137
 # We may want to use asyncache, aiocache or the likes.
@@ -427,6 +436,13 @@ class Series:
             f"V{self.version}",
             *[diff["state"] for diff in await self.get_patches()],
         }
+
+    @cached(cache=TTLCache(maxsize=1, ttl=120))
+    async def patch_subjects(self) -> List[str]:
+        """
+        Returns an ordered list of all patch subjects (tags removed)
+        """
+        return [parse_subject(patch["name"]) for patch in await self.get_patches()]
 
     async def is_expired(self) -> bool:
         for diff in await self.get_patches():
