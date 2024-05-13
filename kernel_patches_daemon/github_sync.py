@@ -119,7 +119,7 @@ class GithubSync(Stats):
                 logging.info(f"Tag '{tag}' mapped to branch order {mapped_branches}")
                 return mapped_branches
 
-        mapped_branches = self.tag_to_branch_mapping["__DEFAULT__"]
+        mapped_branches = self.tag_to_branch_mapping.get("__DEFAULT__", [])
         logging.info(f"Mapped to default branch order: {mapped_branches}")
         return mapped_branches
 
@@ -199,6 +199,11 @@ class GithubSync(Stats):
 
             mapped_branches = await self.get_mapped_branches(series)
             # series to apply - last known series
+            if len(mapped_branches) == 0:
+                logging.info(
+                    f"Skipping {series.id}: {subject.subject} for no mapped branches."
+                )
+                continue
             last_branch = mapped_branches[-1]
             for branch in mapped_branches:
                 worker = self.workers[branch]
