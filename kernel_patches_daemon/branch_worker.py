@@ -672,6 +672,7 @@ class BranchWorker(GithubConnector):
         if pr and pr.state == "closed":
             if can_create:
                 try:
+                    logger.info(f"Trying to re-open {pr}")
                     pr.edit(state="open")
                     self.add_pr(pr)
                     self.prs[pr.title] = pr
@@ -892,6 +893,7 @@ class BranchWorker(GithubConnector):
     def add_pr(self, pr: PullRequest) -> None:
         self.all_prs.setdefault(pr.head.ref, {}).setdefault(pr.base.ref, [])
         self.all_prs[pr.head.ref][pr.base.ref].append(pr)
+        logger.info(f"Found/tracking PR {pr.title=}, {pr.head.ref=}, {pr.base.ref=}")
 
     def get_pulls(self) -> None:
         self.prs = {}
