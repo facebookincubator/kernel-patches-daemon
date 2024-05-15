@@ -397,6 +397,15 @@ def _is_outdated_pr(pr: PullRequest) -> bool:
 
 
 class BranchWorker(GithubConnector):
+    @staticmethod
+    def slugify_context(s: str):
+        # According to patchwork rule:
+        # https://github.com/getpatchwork/patchwork/blob/2aa4742ec88be4cd07f569805d22a35c08a08f40/releasenotes/notes/slugify-check-context-dc586f204b5058a7.yaml
+        # the context need to be a slug, or a string consisting of only
+        # ASCII letters, numbers, underscores or hyphens.
+        # Lets replace all "." with "_"
+        return s.replace(".", "_")
+
     def __init__(
         self,
         patchwork: Patchwork,
@@ -958,7 +967,7 @@ class BranchWorker(GithubConnector):
         # cached state).
         pr.update()
         # if it's merge conflict - report failure
-        ctx = f"{CI_DESCRIPTION}-{self.repo_branch}"
+        ctx = BranchWorker.slugify_context(f"{CI_DESCRIPTION}-{self.repo_branch}")
         if _is_pr_flagged(pr):
             await series.set_check(
                 status=Status.CONFLICT,
@@ -1031,7 +1040,7 @@ class BranchWorker(GithubConnector):
             series.set_check(
                 status=gh_conclusion_to_status(job.conclusion),
                 target_url=job.html_url,
-                context=f"{ctx}-{CI_VMTEST_NAME}-{idx}",
+                context=BranchWorker.slugify_context(f"{ctx}-{CI_VMTEST_NAME}-{idx}"),
                 description=f"Logs for {job.name}",
             )
             for idx, job in enumerate(jobs)
