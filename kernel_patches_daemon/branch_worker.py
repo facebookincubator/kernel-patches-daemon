@@ -869,6 +869,9 @@ class BranchWorker(GithubConnector):
                 can_create=True,
             )
             self.repo_local.git.push("--force", "origin", branch_name)
+            # Metadata inside `pr` may be stale from the force push; refresh it
+            if pr:
+                pr.update()
             return pr
         # we don't have a branch, also means no PR, push first then create PR
         elif branch_name not in self.branches:
