@@ -48,7 +48,7 @@ munch = "^3.0.0"
 urllib3 = "^1.26.0"
 
 [tool.poetry.group.lint.dependencies]
-black = "^23.3.0"
+black = "^24.0.0"
 flake8 = "^5.0.0"
 flake8-import-order = "^0.18.2"
 flake8-comprehensions = "^3.12.0"
