@@ -1091,12 +1091,6 @@ class BranchWorker(GithubConnector):
             new_label = StatusLabelSuffixes.FAIL.to_label(series.version)
             not_label = StatusLabelSuffixes.PASS.to_label(series.version)
 
-        failed_logs = await self.log_extractor.extract_failed_logs(jobs)
-        inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
-
-        subject = await get_ci_email_subject(series)
-        body = furnish_ci_email_body(self.repo, pr, status, series, inline_logs)
-
         labels = {label.name for label in pr.labels}
         # Always make sure to remove the unused label so that we eventually
         # converge on having only one pass/fail label for each version, come
@@ -1114,6 +1108,12 @@ class BranchWorker(GithubConnector):
             # way, send an email notifying the submitter.
             logger.info(f"{pr} is now {new_label}; adding label")
             pr.add_to_labels(new_label)
+
+            logger.info(f"Sending email notification for {pr}")
+            failed_logs = await self.log_extractor.extract_failed_logs(jobs)
+            inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
+            subject = await get_ci_email_subject(series)
+            body = furnish_ci_email_body(self.repo, pr, status, series, inline_logs)
             await send_email(email, series, subject, body, failed_logs)
 
     def expire_branches(self) -> None:
