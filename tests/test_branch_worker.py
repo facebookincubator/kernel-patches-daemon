@@ -32,6 +32,7 @@ from kernel_patches_daemon.branch_worker import (
     temporary_patch_file,
     UPSTREAM_REMOTE_NAME,
 )
+from kernel_patches_daemon.github_logs import DefaultGithubLogExtractor
 from kernel_patches_daemon.patchwork import Series, Subject
 from munch import Munch, munchify
 
@@ -102,6 +103,7 @@ class BranchWorkerMock(BranchWorker):
             "upstream_branch": TEST_UPSTREAM_BRANCH,
             "ci_repo_url": TEST_CI_REPO_URL,
             "ci_branch": TEST_CI_BRANCH,
+            "log_extractor": DefaultGithubLogExtractor(),
             "base_directory": TEST_BASE_DIRECTORY,
         }
         presets.update(kwargs)

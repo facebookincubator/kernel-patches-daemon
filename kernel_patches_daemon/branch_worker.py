@@ -19,6 +19,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
@@ -32,9 +33,11 @@ from github import Auth, GithubException
 from github.Label import Label as GithubLabel
 from github.PullRequest import PullRequest
 from github.Repository import Repository
+from github.WorkflowJob import WorkflowJob
 
 from kernel_patches_daemon.config import EmailConfig
 from kernel_patches_daemon.github_connector import GithubConnector
+from kernel_patches_daemon.github_logs import GithubFailedJobLog, GithubLogExtractor
 from kernel_patches_daemon.patchwork import Patchwork, Series, Subject
 from kernel_patches_daemon.stats import HistogramMetricTimer
 from kernel_patches_daemon.status import (
@@ -124,7 +127,7 @@ has been tested as part of [0] and one or more tests failed.
 
 Please take a look at the failures to ensure that they are not caused by your
 changes.
-
+{inline_logs}
 [0] {github_actions_url}\
 """
 
@@ -192,7 +195,7 @@ async def get_ci_email_subject(series: Series) -> str:
 
 
 def furnish_ci_email_body(
-    repo: Repository, pr: PullRequest, status: Status, series: Series
+    repo: Repository, pr: PullRequest, status: Status, series: Series, inline_logs: str
 ) -> str:
     """Prepare the body of a BPF CI email according to the provided status."""
     if status == Status.SUCCESS:
@@ -200,7 +203,10 @@ def furnish_ci_email_body(
         body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=github_actions_url)
     elif status == Status.FAILURE:
         github_actions_url = get_github_actions_url(repo, pr, status)
-        body = EMAIL_TEMPLATE_FAILURE_BODY.format(github_actions_url=github_actions_url)
+        body = EMAIL_TEMPLATE_FAILURE_BODY.format(
+            inline_logs=inline_logs,
+            github_actions_url=github_actions_url,
+        )
     else:
         assert status == Status.CONFLICT
         body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=pr.html_url)
@@ -219,7 +225,13 @@ def generate_msg_id(host: str) -> str:
     return f"{checksum}@{host}"
 
 
-async def send_email(config: EmailConfig, series: Series, subject: str, body: str):
+async def send_email(
+    config: EmailConfig,
+    series: Series,
+    subject: str,
+    body: str,
+    failed_logs: List[GithubFailedJobLog],
+):
     """Send an email."""
     # We work with curl as it's the only thing that supports SMTP via an HTTP
     # proxy, which is something we require for production environments.
@@ -266,6 +278,11 @@ async def send_email(config: EmailConfig, series: Series, subject: str, body: st
     if cc_list:
         msg["Cc"] = ",".join(cc_list)
     msg.attach(MIMEText(body, "plain"))
+    for log in failed_logs:
+        filename = f"{log.suite}-{log.arch}-{log.compiler}.txt"
+        attachment = MIMEApplication(log.log.encode(), Name=filename)
+        attachment["Content-Disposition"] = f'attachment; filename="{filename}"'
+        msg.attach(attachment)
     proc = await asyncio.create_subprocess_exec(
         *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
     )
@@ -417,6 +434,7 @@ class BranchWorker(GithubConnector):
         base_directory: str,
         ci_repo_url: str,
         ci_branch: str,
+        log_extractor: GithubLogExtractor,
         github_oauth_token: Optional[str] = None,
         app_auth: Optional[Auth.AppInstallationAuth] = None,
         email: Optional[EmailConfig] = None,
@@ -432,6 +450,7 @@ class BranchWorker(GithubConnector):
         self.patchwork = patchwork
         self.email = email
 
+        self.log_extractor = log_extractor
         self.ci_repo_url = ci_repo_url
         self.ci_repo_dir = _uniq_tmp_folder(ci_repo_url, ci_branch, base_directory)
         self.ci_branch = ci_branch
@@ -978,7 +997,7 @@ class BranchWorker(GithubConnector):
                 context=f"{ctx}-PR",
                 description=MERGE_CONFLICT_LABEL,
             )
-            await self.evaluate_ci_result(Status.CONFLICT, series, pr)
+            await self.evaluate_ci_result(Status.CONFLICT, series, pr, [])
             return
 
         logger.info(f"Fetching workflow runs for {pr}: {pr.head.ref} (@ {pr.head.sha})")
@@ -1050,10 +1069,10 @@ class BranchWorker(GithubConnector):
         ]
         await asyncio.gather(*tasks)
 
-        await self.evaluate_ci_result(status, series, pr)
+        await self.evaluate_ci_result(status, series, pr, jobs)
 
     async def evaluate_ci_result(
-        self, status: Status, series: Series, pr: PullRequest
+        self, status: Status, series: Series, pr: PullRequest, jobs: List[WorkflowJob]
     ) -> None:
         """Evaluate the result of a CI run and send an email as necessary."""
         email = self.email
@@ -1072,8 +1091,11 @@ class BranchWorker(GithubConnector):
             new_label = StatusLabelSuffixes.FAIL.to_label(series.version)
             not_label = StatusLabelSuffixes.PASS.to_label(series.version)
 
+        failed_logs = await self.log_extractor.extract_failed_logs(jobs)
+        inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
+
         subject = await get_ci_email_subject(series)
-        body = furnish_ci_email_body(self.repo, pr, status, series)
+        body = furnish_ci_email_body(self.repo, pr, status, series, inline_logs)
 
         labels = {label.name for label in pr.labels}
         # Always make sure to remove the unused label so that we eventually
@@ -1092,7 +1114,7 @@ class BranchWorker(GithubConnector):
             # way, send an email notifying the submitter.
             logger.info(f"{pr} is now {new_label}; adding label")
             pr.add_to_labels(new_label)
-            await send_email(email, series, subject, body)
+            await send_email(email, series, subject, body, failed_logs)
 
     def expire_branches(self) -> None:
         for branch in self.branches:

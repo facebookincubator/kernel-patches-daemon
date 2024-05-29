@@ -21,6 +21,11 @@ from kernel_patches_daemon.branch_worker import (
     NewPRWithNoChangeException,
 )
 from kernel_patches_daemon.config import BranchConfig, KPDConfig
+from kernel_patches_daemon.github_logs import (
+    BpfGithubLogExtractor,
+    DefaultGithubLogExtractor,
+    GithubLogExtractor,
+)
 
 from kernel_patches_daemon.patchwork import Patchwork, Series, Subject
 from kernel_patches_daemon.stats import HistogramMetricTimer, Stats
@@ -64,6 +69,19 @@ def github_app_auth_from_branch_config(
         return None
 
 
+def _log_extractor_from_project(project: str) -> GithubLogExtractor:
+    """
+    Construct a concrete instance of GithubLogExtractor suitable for
+    the patchwork project we're running against. The logs are different
+    between projects, so we have to handle the differences through
+    this abstraction.
+    """
+    if project == "bpf":
+        return BpfGithubLogExtractor()
+    else:
+        return DefaultGithubLogExtractor()
+
+
 class GithubSync(Stats):
     def __init__(
         self,
@@ -89,6 +107,7 @@ class GithubSync(Stats):
                 upstream_branch=branch_config.upstream_branch,
                 ci_repo_url=branch_config.ci_repo,
                 ci_branch=branch_config.ci_branch,
+                log_extractor=_log_extractor_from_project(kpd_config.patchwork.project),
                 base_directory=kpd_config.base_directory,
                 http_retries=http_retries,
                 github_oauth_token=branch_config.github_oauth_token,
