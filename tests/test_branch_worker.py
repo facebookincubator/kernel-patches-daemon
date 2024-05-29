@@ -887,7 +887,7 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         # Note despite file.txt not changing, this still creates commits.
         for i in range(1, 2 * ALREADY_MERGED_LOOKBACK + 1):
             self.repo.index.add(["file.txt"])
-            self.repo.index.commit(f"{i}\n\nThis commit body should never match")
+            self.repo.index.commit(f"Commit {i}\n\nThis commit body should never match")
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir)
@@ -936,24 +936,33 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
     async def test_applied_all(self, m: aioresponses):
         in_1 = ALREADY_MERGED_LOOKBACK + 33
         in_2 = ALREADY_MERGED_LOOKBACK + 34
-        series = await self._get_series(m, [f"{in_1}", f"[tag] {in_2}"])
+        series = await self._get_series(m, [f"Commit {in_1}", f"[tag] Commit {in_2}"])
         self.assertTrue(await _series_already_applied(self.repo, series))
 
     @aioresponses()
     async def test_applied_none_newer(self, m: aioresponses):
         out_1 = ALREADY_MERGED_LOOKBACK * 2 + 2
         out_2 = ALREADY_MERGED_LOOKBACK * 2 + 3
-        series = await self._get_series(m, [f"[some tags]{out_1}", f"[tag] {out_2}"])
+        series = await self._get_series(
+            m, [f"[some tags]Commit {out_1}", f"[tag] Commit {out_2}"]
+        )
         self.assertFalse(await _series_already_applied(self.repo, series))
 
     @aioresponses()
     async def test_applied_none_older(self, m: aioresponses):
-        series = await self._get_series(m, ["[some tags]33", "[tag] 34"])
+        series = await self._get_series(m, ["[some tags]Commit 33", "[tag] Commit 34"])
         self.assertFalse(await _series_already_applied(self.repo, series))
 
     @aioresponses()
     async def test_applied_some(self, m: aioresponses):
         inside = ALREADY_MERGED_LOOKBACK + 55
         out = ALREADY_MERGED_LOOKBACK * 3
-        series = await self._get_series(m, [str(inside), str(out)])
+        series = await self._get_series(m, [f"Commit {inside}", f"Commit {out}"])
         self.assertFalse(await _series_already_applied(self.repo, series))
+
+    @aioresponses()
+    async def test_applied_all_case_insensitive(self, m: aioresponses):
+        in_1 = ALREADY_MERGED_LOOKBACK + 33
+        in_2 = ALREADY_MERGED_LOOKBACK + 34
+        series = await self._get_series(m, [f"commit {in_1}", f"[tag] COMMIT {in_2}"])
+        self.assertTrue(await _series_already_applied(self.repo, series))

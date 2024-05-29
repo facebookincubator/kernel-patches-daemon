@@ -368,14 +368,14 @@ async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
     """
     try:
         summaries = {
-            commit.summary
+            commit.summary.lower()
             for commit in repo.iter_commits(max_count=ALREADY_MERGED_LOOKBACK)
         }
     except git.exc.GitCommandError:
         logger.exception("Failed to check series application status")
         return False
 
-    return all(ps in summaries for ps in await series.patch_subjects())
+    return all(ps.lower() in summaries for ps in await series.patch_subjects())
 
 
 def _is_outdated_pr(pr: PullRequest) -> bool:
