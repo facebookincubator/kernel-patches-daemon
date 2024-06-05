@@ -17,6 +17,7 @@ import os
 import shutil
 import tempfile
 import time
+from collections import namedtuple
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
@@ -127,6 +128,12 @@ Matrix:     {github_actions_url}
 """
 
 
+# Context used to format email notification body
+EmailBodyContext = namedtuple(
+    "EmailBodyContext", "status submission_name patchwork_url github_url inline_logs"
+)
+
+
 class StatusLabelSuffixes(Enum):
     PASS = "ci-pass"
     FAIL = "ci-fail"
@@ -189,27 +196,40 @@ async def get_ci_email_subject(series: Series) -> str:
     return f"Re: {msg.get('subject', series.name)}"
 
 
-def furnish_ci_email_body(
+def build_email_body_context(
     repo: Repository, pr: PullRequest, status: Status, series: Series, inline_logs: str
-) -> str:
-    """Prepare the body of a BPF CI email according to the provided status."""
-    if status == Status.SUCCESS:
-        github_actions_url = get_github_actions_url(repo, pr, status)
-        body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=github_actions_url)
-    elif status == Status.FAILURE:
-        github_actions_url = get_github_actions_url(repo, pr, status)
+) -> EmailBodyContext:
+    """
+    Generate a context to be used for formatting email notification body.
+
+    This is used as an extra indirection to make testing easier.
+    """
+    return EmailBodyContext(
+        status=status,
+        submission_name=get_ci_base(series)["name"],
+        patchwork_url=series.web_url + "&state=*",
+        github_url=get_github_actions_url(repo, pr, status),
+        inline_logs=inline_logs,
+    )
+
+
+def furnish_ci_email_body(ctx: EmailBodyContext) -> str:
+    """Prepare the body of a BPF CI email according to the provided context"""
+    if ctx.status == Status.SUCCESS:
+        body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=ctx.github_url)
+    elif ctx.status == Status.FAILURE:
         body = EMAIL_TEMPLATE_FAILURE_BODY.format(
-            inline_logs=inline_logs,
-            github_actions_url=github_actions_url,
+            inline_logs=ctx.inline_logs,
+            github_actions_url=ctx.github_url,
         )
     else:
-        assert status == Status.CONFLICT
-        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=pr.html_url)
+        assert ctx.status == Status.CONFLICT
+        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=ctx.github_url)
 
     return EMAIL_TEMPLATE_BASE.format(
-        status=str(status.value).upper(),
-        submission_name=get_ci_base(series)["name"],
-        pw_series_url=series.web_url + "&state=*",
+        status=str(ctx.status.value).upper(),
+        submission_name=ctx.submission_name,
+        pw_series_url=ctx.patchwork_url,
         body=body,
     )
 
@@ -1102,7 +1122,8 @@ class BranchWorker(GithubConnector):
             failed_logs = await self.log_extractor.extract_failed_logs(jobs)
             inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
             subject = await get_ci_email_subject(series)
-            body = furnish_ci_email_body(self.repo, pr, status, series, inline_logs)
+            ctx = build_email_body_context(self.repo, pr, status, series, inline_logs)
+            body = furnish_ci_email_body(ctx)
             await send_email(email, series, subject, body)
 
     def expire_branches(self) -> None:
