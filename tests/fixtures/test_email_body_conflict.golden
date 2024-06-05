@@ -1,0 +1,15 @@
+Dear patch submitter,
+
+CI has tested the following submission:
+Status:     CONFLICT
+Name:       [bpf-next] Conflicting patchset
+Patchwork:  https://patchwork.com/conflict
+PR:         https://github.com/conflict
+
+Please rebase your submission onto the most recent upstream change and resubmit
+the patch to get it tested again.
+
+
+Please note: this email is coming from an unmonitored mailbox. If you have
+questions or feedback, please reach out to the Meta Kernel CI team at
+kernel-ci@meta.com.

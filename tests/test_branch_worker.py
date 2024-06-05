@@ -6,6 +6,8 @@
 
 # pyre-unsafe
 
+import importlib.resources
+import os
 import random
 import shutil
 import tempfile
@@ -27,6 +29,8 @@ from kernel_patches_daemon.branch_worker import (
     BRANCH_TTL,
     BranchWorker,
     create_color_labels,
+    EmailBodyContext,
+    furnish_ci_email_body,
     has_same_base_different_remote,
     HEAD_BASE_SEPARATOR,
     temporary_patch_file,
@@ -34,6 +38,7 @@ from kernel_patches_daemon.branch_worker import (
 )
 from kernel_patches_daemon.github_logs import DefaultGithubLogExtractor
 from kernel_patches_daemon.patchwork import Series, Subject
+from kernel_patches_daemon.status import Status
 from munch import Munch, munchify
 
 from tests.common.patchwork_mock import (
@@ -89,6 +94,12 @@ SERIES_DATA: Dict[str, Any] = {
     "submitter": {"email": "a-user@example.com"},
     "mbox": "https://example.com",
 }
+
+
+def read_fixture(filepath: str) -> str:
+    with importlib.resources.path(__package__, "fixtures") as base:
+        with open(os.path.join(base, "fixtures", filepath)) as f:
+            return f.read()
 
 
 class BranchWorkerMock(BranchWorker):
@@ -968,3 +979,51 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         in_2 = ALREADY_MERGED_LOOKBACK + 34
         series = await self._get_series(m, [f"commit {in_1}", f"[tag] COMMIT {in_2}"])
         self.assertTrue(await _series_already_applied(self.repo, series))
+
+
+class TestEmailNotificationBody(unittest.TestCase):
+    # Always show full diff on string match failures
+    maxDiff = None
+
+    def test_email_body_success(self):
+        expected = read_fixture("test_email_body_success.golden")
+
+        ctx = EmailBodyContext(
+            status=Status.SUCCESS,
+            submission_name="[bpf] Successfull patchset",
+            patchwork_url="https://patchwork.com/success",
+            github_url="https://github.com/success",
+            inline_logs="",
+        )
+        body = furnish_ci_email_body(ctx)
+
+        self.assertEqual(expected, body)
+
+    def test_email_body_failure(self):
+        inline_logs = read_fixture("test_inline_email_text_multiple.golden")
+        expected = read_fixture("test_email_body_failure.golden")
+
+        ctx = EmailBodyContext(
+            status=Status.FAILURE,
+            submission_name="[bpf] Failing patchset",
+            patchwork_url="https://patchwork.com/failure",
+            github_url="https://github.com/failure",
+            inline_logs=inline_logs,
+        )
+        body = furnish_ci_email_body(ctx)
+
+        self.assertEqual(expected, body)
+
+    def test_email_body_conflict(self):
+        expected = read_fixture("test_email_body_conflict.golden")
+
+        ctx = EmailBodyContext(
+            status=Status.CONFLICT,
+            submission_name="[bpf-next] Conflicting patchset",
+            patchwork_url="https://patchwork.com/conflict",
+            github_url="https://github.com/conflict",
+            inline_logs="",
+        )
+        body = furnish_ci_email_body(ctx)
+
+        self.assertEqual(expected, body)
