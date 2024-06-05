@@ -230,7 +230,6 @@ async def send_email(
     series: Series,
     subject: str,
     body: str,
-    failed_logs: List[GithubFailedJobLog],
 ):
     """Send an email."""
     # We work with curl as it's the only thing that supports SMTP via an HTTP
@@ -278,11 +277,6 @@ async def send_email(
     if cc_list:
         msg["Cc"] = ",".join(cc_list)
     msg.attach(MIMEText(body, "plain"))
-    for log in failed_logs:
-        filename = f"{log.suite}-{log.arch}-{log.compiler}.txt"
-        attachment = MIMEApplication(log.log.encode(), Name=filename)
-        attachment["Content-Disposition"] = f'attachment; filename="{filename}"'
-        msg.attach(attachment)
     proc = await asyncio.create_subprocess_exec(
         *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
     )
@@ -1114,7 +1108,7 @@ class BranchWorker(GithubConnector):
             inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
             subject = await get_ci_email_subject(series)
             body = furnish_ci_email_body(self.repo, pr, status, series, inline_logs)
-            await send_email(email, series, subject, body, failed_logs)
+            await send_email(email, series, subject, body)
 
     def expire_branches(self) -> None:
         for branch in self.branches:
