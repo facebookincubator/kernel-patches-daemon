@@ -88,14 +88,13 @@ UPSTREAM_REMOTE_NAME = "upstream"
 EMAIL_TEMPLATE_BASE: Final[
     str
 ] = """\
-Dear BPF patch submitter,
+Dear patch submitter,
 
-[{status}] Your Patchwork submission
-{submission_name} [1]
+CI has tested the following submission:
+Status:     {status}
+Name:       {submission_name}
+Patchwork:  {pw_series_url}
 {body}
-[1] {pw_series_url}
-
-
 
 Please note: this email is coming from an unmonitored mailbox. If you have
 questions or feedback, please reach out to the Meta Kernel CI team at
@@ -105,30 +104,26 @@ kernel-ci@meta.com.
 EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[
     str
 ] = """\
-failed to apply cleanly for BPF CI testing [0]. Please rebase it onto the most
-recent upstream change and resubmit the patch to get it tested again.
+PR:         {github_pr_url}
 
-[0] {github_pr_url}\
+Please rebase your submission onto the most recent upstream change and resubmit
+the patch to get it tested again.
 """
 
 EMAIL_TEMPLATE_SUCCESS_BODY: Final[
     str
 ] = """\
-has been tested as part of [0] and passed all checks. No further action is
-necessary on your part.
+Matrix:     {github_actions_url}
 
-[0] {github_actions_url}\
+No further action is necessary on your part.
 """
 
 EMAIL_TEMPLATE_FAILURE_BODY: Final[
     str
 ] = """\
-has been tested as part of [0] and one or more tests failed.
+Matrix:     {github_actions_url}
 
-Please take a look at the failures to ensure that they are not caused by your
-changes.
-{inline_logs}
-[0] {github_actions_url}\
+{inline_logs}\
 """
 
 
