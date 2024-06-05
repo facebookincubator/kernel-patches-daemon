@@ -1,157 +1,17 @@
 
-Failure in test_progs-x86_64-gcc:
-> #53 cgrp_local_storage
-> cgrp2_local_storage:PASS:join_cgroup /cgrp_local_storage 0 nsec
-> #53/2 cgrp_local_storage/attach_cgroup
-> test_attach_cgroup:PASS:skel_open 0 nsec
-> test_attach_cgroup:PASS:prog_attach 0 nsec
-> test_attach_cgroup:PASS:prog_attach 0 nsec
-> test_attach_cgroup:PASS:prog_attach 0 nsec
-> test_attach_cgroup:PASS:start_server 0 nsec
-> test_attach_cgroup:PASS:connect_to_fd 0 nsec
-> test_attach_cgroup:FAIL:map_lookup(socket_cookies) unexpected error: -2 (errno 2)
+Failed jobs:
+test_progs-x86_64-gcc: https://job1.com
+test_progs_no_alu32-x86_64-gcc: https://job2.com
 
-Failure in test_progs_no_alu32-x86_64-gcc:
-> #32/14 btf_dump/btf_dump: struct_data
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> test_btf_dump_struct_data:PASS:find type id 0 nsec
-> test_btf_dump_struct_data:PASS:unexpected return value dumping file_operations 0 nsec
-> test_btf_dump_struct_data:FAIL:file_operations unexpected file_operations: actual '(struct file_operations){
->   .owner = (struct module *)0xffffffffffffffff,
->   .fop_flags = (fop_flags_t)4294967295,
->   .llseek = (loff_t (*)(struct f' != expected '(struct file_operations){
->   .owner = (struct module *)0xffffffffffffffff,
->   .llseek = (loff_t (*)(struct file *, loff_t, int))0xffffffffffffffff,'
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> test_btf_dump_struct_data:PASS:find fs_context 0 nsec
-> test_btf_dump_struct_data:PASS:unexpected return value dumping fs_context 0 nsec
-> test_btf_dump_struct_data:PASS:bitfield value not present 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed/unexpected type_sz 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> test_btf_dump_struct_data:PASS:find struct sk_buff 0 nsec
-> test_btf_dump_struct_data:PASS:unexpected return value dumping sk_buff 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed to return -E2BIG 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
-> btf_dump_data:PASS:verify prefix match 0 nsec
-> btf_dump_data:PASS:find type id 0 nsec
-> btf_dump_data:PASS:failed to return -E2BIG 0 nsec
-> btf_dump_data:PASS:ensure expected/actual match 0 nsec
+First test_progs failure (test_progs-x86_64-gcc):
+#53 cgrp_local_storage
+cgrp2_local_storage:PASS:join_cgroup /cgrp_local_storage 0 nsec
+#53/2 cgrp_local_storage/attach_cgroup
+test_attach_cgroup:PASS:skel_open 0 nsec
+test_attach_cgroup:PASS:prog_attach 0 nsec
+test_attach_cgroup:PASS:prog_attach 0 nsec
+test_attach_cgroup:PASS:prog_attach 0 nsec
+test_attach_cgroup:PASS:start_server 0 nsec
+test_attach_cgroup:PASS:connect_to_fd 0 nsec
+test_attach_cgroup:FAIL:map_lookup(socket_cookies) unexpected error: -2 (errno 2)
 

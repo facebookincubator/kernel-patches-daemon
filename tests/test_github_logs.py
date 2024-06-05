@@ -25,10 +25,11 @@ def read_fixture(filepath: str) -> str:
 class MockWorkflowJob(WorkflowJob):
     """Pretty hacky mock object where we only override the fields the code uses"""
 
-    def __init__(self, name: str, conclusion: str, logs_url: str):
+    def __init__(self, name: str, conclusion: str, logs_url: str, html_url: str):
         self.__name: str = name
         self.__conclusion: str = conclusion
         self.__logs_url: str = logs_url
+        self.__html_url: str = html_url
 
     @property
     def name(self) -> str:
@@ -41,8 +42,15 @@ class MockWorkflowJob(WorkflowJob):
     def logs_url(self) -> str:
         return self.__logs_url
 
+    @property
+    def html_url(self) -> str:
+        return self.__html_url
+
 
 class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
+    # Always show full diff on string match failures
+    maxDiff = None
+
     @aioresponses()
     async def test_extract_some_failures(self, mocked: aioresponses):
         mocked.get("job1.com", status=200, body="job1")
@@ -51,15 +59,22 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
 
         jobs = [
             MockWorkflowJob(
-                "x86_64-gcc / test / suite1 on x86_64 with gcc", "failure", "job1.com"
+                "x86_64-gcc / test / suite1 on x86_64 with gcc",
+                "failure",
+                "job1.com",
+                "https://job1.com",
             ),
             MockWorkflowJob(
-                "aarch64-gcc / test / suite2 on aarch64 with gcc", "success", "job2.com"
+                "aarch64-gcc / test / suite2 on aarch64 with gcc",
+                "success",
+                "job2.com",
+                "https://job2.com",
             ),
             MockWorkflowJob(
                 "s390x-llvm-17 / test / suite3 on s390x with llvm-17",
                 "failure",
                 "job3.com",
+                "https://job3.com",
             ),
         ]
 
@@ -83,12 +98,16 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
 
         jobs = [
             MockWorkflowJob(
-                "x86_64-gcc / test / suite1 on x86_64 with gcc", "pending", "job1.com"
+                "x86_64-gcc / test / suite1 on x86_64 with gcc",
+                "pending",
+                "job1.com",
+                "https://job2.com",
             ),
             MockWorkflowJob(
                 "aarch64-gcc / build / suite2 on aarch64 with gcc",
                 "success",
                 "job2.com",
+                "https://job2.com",
             ),
         ]
 
@@ -103,10 +122,16 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
 
         jobs = [
             MockWorkflowJob(
-                "valid / valid / suite1 zzz x86_64 with gcc", "failure", "job1.com"
+                "valid / valid / suite1 zzz x86_64 with gcc",
+                "failure",
+                "job1.com",
+                "https://job1.com",
             ),
             MockWorkflowJob(
-                "valid / valid / build for aarch64 with gcc", "failure", "job2.com"
+                "valid / valid / build for aarch64 with gcc",
+                "failure",
+                "job2.com",
+                "https://job2.com",
             ),
         ]
 
@@ -123,9 +148,14 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
         mocked.get("job2.com", status=200, body="job2")
 
         jobs = [
-            MockWorkflowJob("valid / valid / zzzzzzzzz", "pending", "job1.com"),
             MockWorkflowJob(
-                "valid / valid / this is-not a valid job", "success", "job2.com"
+                "valid / valid / zzzzzzzzz", "pending", "job1.com", "https://job1.com"
+            ),
+            MockWorkflowJob(
+                "valid / valid / this is-not a valid job",
+                "success",
+                "job2.com",
+                "https://job2.com",
             ),
         ]
 
@@ -146,11 +176,14 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
         mocked.get("job3.com", status=200, body="job3")
 
         jobs = [
-            MockWorkflowJob("suite1 on x86_64 with gcc", "failure", "job1.com"),
+            MockWorkflowJob(
+                "suite1 on x86_64 with gcc", "failure", "job1.com", "https://job1.com"
+            ),
             MockWorkflowJob(
                 "suite3 on s390x with llvm-17",
                 "failure",
                 "job3.com",
+                "https://job3.com",
             ),
         ]
 
@@ -179,6 +212,7 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
                     arch="x86_64",
                     compiler="llvm-17",
                     log=input,
+                    url="https://job1.com",
                 )
             ]
         )
@@ -197,6 +231,7 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
                     arch="x86_64",
                     compiler="gcc",
                     log=input,
+                    url="https://job1.com",
                 )
             ]
         )
@@ -216,12 +251,14 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
                     arch="x86_64",
                     compiler="gcc",
                     log=input1,
+                    url="https://job1.com",
                 ),
                 GithubFailedJobLog(
                     suite="test_progs_no_alu32",
                     arch="x86_64",
                     compiler="gcc",
                     log=input2,
+                    url="https://job2.com",
                 ),
             ]
         )

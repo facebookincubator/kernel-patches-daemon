@@ -22,11 +22,12 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class GithubFailedJobLog:
-    def __init__(self, suite: str, arch: str, compiler: str, log: str):
+    def __init__(self, suite: str, arch: str, compiler: str, log: str, url: str):
         self._suite: str = suite
         self._arch: str = arch
         self._compiler: str = compiler
         self._log: str = log
+        self._url: str = url
 
     @property
     def suite(self) -> str:
@@ -43,6 +44,14 @@ class GithubFailedJobLog:
     @property
     def log(self) -> str:
         return self._log
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def name(self) -> str:
+        return f"{self._suite}-{self._arch}-{self._compiler}"
 
 
 class GithubLogExtractor(ABC):
@@ -136,6 +145,7 @@ class BpfGithubLogExtractor(GithubLogExtractor):
             arch=arch,
             compiler=compiler,
             log=log,
+            url=job.html_url,
         )
 
     async def extract_failed_logs(
@@ -192,9 +202,15 @@ class BpfGithubLogExtractor(GithubLogExtractor):
         The returned string will include newline padding before and after the
         text (to make downstream formatting simpler).
         """
-        text = ""
-        snippets = []
+        if not logs:
+            return ""
 
+        # Render header with links to failed jobs
+        text = "\nFailed jobs:\n"
+        for log in logs:
+            text += f"{log.name}: {log.url}\n"
+
+        # Render first test_progs failure
         for log in logs:
             if not log.suite.startswith(self.TEST_PROGS_PREFIX):
                 continue
@@ -203,15 +219,9 @@ class BpfGithubLogExtractor(GithubLogExtractor):
             if not error:
                 continue
 
-            snippet = f"Failure in {log.suite}-{log.arch}-{log.compiler}:\n"
-            for line in error.splitlines():
-                snippet += f"> {line}\n"
+            text += f"\nFirst test_progs failure ({log.name}):\n"
+            text += f"{error}\n"
+            break
 
-            snippets.append(snippet)
-
-        if snippets:
-            text += "\n"
-            text += "\n".join(snippets)
-            text += "\n"
-
+        text += "\n"
         return text
