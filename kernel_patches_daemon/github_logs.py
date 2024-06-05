@@ -73,9 +73,6 @@ class GithubLogExtractor(ABC):
         Given a list of failed job logs, return a (possibly multi-line) string
         suitable to be embedded in the body of a notification email. The text
         will try to be conservative -- high signal to email length is important.
-
-        The returned string will include newline padding before and after the
-        text (to make downstream formatting simpler).
         """
         raise NotImplementedError
 
@@ -198,15 +195,12 @@ class BpfGithubLogExtractor(GithubLogExtractor):
         Given a list of failed job logs, return a (possibly multi-line) string
         suitable to be embedded in the body of a notification email. The text
         will try to be conservative -- high signal to email length is important.
-
-        The returned string will include newline padding before and after the
-        text (to make downstream formatting simpler).
         """
         if not logs:
             return ""
 
         # Render header with links to failed jobs
-        text = "\nFailed jobs:\n"
+        text = "Failed jobs:\n"
         for log in logs:
             text += f"{log.name}: {log.url}\n"
 
@@ -223,5 +217,4 @@ class BpfGithubLogExtractor(GithubLogExtractor):
             text += f"{error}\n"
             break
 
-        text += "\n"
         return text

@@ -1,4 +1,3 @@
-
 Failed jobs:
 test_progs-x86_64-gcc: https://job1.com
 
@@ -13,4 +12,3 @@ test_attach_cgroup:PASS:prog_attach 0 nsec
 test_attach_cgroup:PASS:start_server 0 nsec
 test_attach_cgroup:PASS:connect_to_fd 0 nsec
 test_attach_cgroup:FAIL:map_lookup(socket_cookies) unexpected error: -2 (errno 2)
-
