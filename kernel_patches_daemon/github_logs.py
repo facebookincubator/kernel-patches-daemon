@@ -11,7 +11,6 @@ import io
 import logging
 import re
 from abc import ABC, abstractmethod
-from collections import namedtuple
 from typing import Final, List, Optional, Sequence
 
 import aiohttp
@@ -21,7 +20,29 @@ from kernel_patches_daemon.status import gh_conclusion_to_status, Status
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-GithubFailedJobLog = namedtuple("GithubFailedJobLog", "suite arch compiler log")
+
+class GithubFailedJobLog:
+    def __init__(self, suite: str, arch: str, compiler: str, log: str):
+        self._suite: str = suite
+        self._arch: str = arch
+        self._compiler: str = compiler
+        self._log: str = log
+
+    @property
+    def suite(self) -> str:
+        return self._suite
+
+    @property
+    def arch(self) -> str:
+        return self._arch
+
+    @property
+    def compiler(self) -> str:
+        return self._compiler
+
+    @property
+    def log(self) -> str:
+        return self._log
 
 
 class GithubLogExtractor(ABC):
