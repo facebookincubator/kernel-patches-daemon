@@ -8,6 +8,7 @@
 
 import json
 import os
+import re
 import unittest
 from typing import Dict, Union
 from unittest.mock import mock_open, patch
@@ -58,10 +59,9 @@ class TestConfig(unittest.TestCase):
                 smtp_cc=["email1-cc@example.com", "email2-cc@example.com"],
                 smtp_pass="super-secret-is-king",
                 smtp_http_proxy="http://example.com:8080",
-                # pyre-ignore
                 submitter_allowlist=[
-                    "email1-allow@example.com",
-                    "email2-allow@example.com",
+                    re.compile("email1-allow@example.com"),
+                    re.compile("email2-allow@example.com"),
                 ],
                 ignore_allowlist=True,
             ),

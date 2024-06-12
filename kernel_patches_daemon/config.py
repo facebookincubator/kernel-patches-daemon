@@ -10,6 +10,7 @@ import json
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
@@ -115,7 +116,7 @@ class EmailConfig:
     # be temporary while the email notification feature is being rolled out.
     # Once we send email notifications to all patch submitters it can be
     # removed.
-    submitter_allowlist: Set[str]
+    submitter_allowlist: List[re.Pattern]
     # Ignore the `submitter_allowlist` entries and send emails to all patch
     # submitters, unconditionally.
     ignore_allowlist: bool
@@ -131,7 +132,9 @@ class EmailConfig:
             smtp_to=json.get("to", []),
             smtp_cc=json.get("cc", []),
             smtp_http_proxy=json.get("http_proxy", None),
-            submitter_allowlist=json.get("submitter_allowlist", set()),
+            submitter_allowlist=[
+                re.compile(pattern) for pattern in json.get("submitter_allowlist", [])
+            ],
             ignore_allowlist=json.get("ignore_allowlist", False),
         )
 

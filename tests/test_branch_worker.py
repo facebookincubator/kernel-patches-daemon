@@ -9,6 +9,7 @@
 import importlib.resources
 import os
 import random
+import re
 import shutil
 import tempfile
 import unittest
@@ -29,6 +30,7 @@ from kernel_patches_daemon.branch_worker import (
     BRANCH_TTL,
     BranchWorker,
     create_color_labels,
+    email_in_submitter_allowlist,
     EmailBodyContext,
     furnish_ci_email_body,
     has_same_base_different_remote,
@@ -1027,3 +1029,48 @@ class TestEmailNotificationBody(unittest.TestCase):
         body = furnish_ci_email_body(ctx)
 
         self.assertEqual(expected, body)
+
+
+class TestEmailSubmitterAllowlist(unittest.TestCase):
+    def test_non_regex(self):
+        allowlist = [
+            re.compile("asdf@gmail.com"),
+            re.compile("some.email@domain.xyz"),
+        ]
+
+        cases = [
+            ("asdf@gmail.com", True),
+            ("zzz@gmail.com", False),
+            # No partial matches allows
+            ("asdf@gmail.com.xyz", False),
+            ("leading-asdf@gmail.com", False),
+            ("some.email@domain.xyz", True),
+            # False positives are allowed - this is a rollout mechanism
+            ("somezemail@domain.xyz", True),
+        ]
+
+        for email, expected in cases:
+            with self.subTest(msg=email):
+                result = email_in_submitter_allowlist(email, allowlist)
+                self.assertEqual(result, expected)
+
+    def test_regex_match(self):
+        allowlist = [
+            re.compile(r"^[a-gA-G].*"),
+            re.compile(r"some.email@domain.xyz"),
+        ]
+
+        cases = [
+            ("asdf@gmail.com", True),
+            ("Asdf@gmail.com", True),
+            ("gsdf@gmail.com", True),
+            ("Gsdf@gmail.com", True),
+            ("zzz@gmail.com", False),
+            ("Zzz@gmail.com", False),
+            ("some.email@domain.xyz", True),
+        ]
+
+        for email, expected in cases:
+            with self.subTest(msg=email):
+                result = email_in_submitter_allowlist(email, allowlist)
+                self.assertEqual(result, expected)

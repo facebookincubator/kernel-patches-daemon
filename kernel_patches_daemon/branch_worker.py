@@ -14,6 +14,7 @@ import email.policy
 import hashlib
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -26,7 +27,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE
-from typing import Any, Dict, Final, Generator, IO, List, Optional, Tuple
+from typing import Any, Dict, Final, Generator, IO, List, Optional, Sequence, Tuple
 
 import dateutil.parser
 import git
@@ -238,6 +239,17 @@ def generate_msg_id(host: str) -> str:
     """Generate an email message ID based on the provided host."""
     checksum = hashlib.sha256(str(time.time()).encode("utf-8")).hexdigest()
     return f"{checksum}@{host}"
+
+
+def email_in_submitter_allowlist(email: str, allowlist: Sequence[re.Pattern]) -> bool:
+    """
+    Checks if an email is in the submitter allowlist
+
+    Note that there may be false positives when folks have regex syntax in
+    their email address. But that is ok -- this is simply a rollout mechanism.
+    We only need to roughly control the rollout.
+    """
+    return any(regex.fullmatch(email) for regex in allowlist)
 
 
 async def send_email(
