@@ -908,10 +908,21 @@ class BranchWorker(GithubConnector):
                 branch_name=branch_name,
                 can_create=True,
             )
+            assert pr
             self.repo_local.git.push("--force", "origin", branch_name)
+
             # Metadata inside `pr` may be stale from the force push; refresh it
-            if pr:
+            pr.update()
+            wanted_sha = self.repo_local.head.commit.hexsha
+            for _ in range(30):
+                if pr.head.sha == wanted_sha:
+                    break
+                logger.info(f"Waiting for {pr} sha={pr.head.sha} to go to {wanted_sha}")
+                await asyncio.sleep(1)
                 pr.update()
+            else:
+                raise RuntimeError("Github failed to update PR after force push")
+
             return pr
         # we don't have a branch, also means no PR, push first then create PR
         elif branch_name not in self.branches:
