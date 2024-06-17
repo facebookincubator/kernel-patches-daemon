@@ -399,6 +399,10 @@ async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
     Returns whether or not the given series has already been applied
     to the active branch on `repo`.
 
+    We consider even a single applied patch in a series as the series being
+    applied. This is b/c the applied patch is marked as "accepted" and thus the
+    entire series is marked as closed. See patchwork.py::is_closed.
+
     Note we are only checking the commit summaries. We have to be
     conservative b/c the commit messages will have trailers attached
     upon merge. And we cannot check the commit diff b/c maintainers
@@ -413,7 +417,7 @@ async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
         logger.exception("Failed to check series application status")
         return False
 
-    return all(ps.lower() in summaries for ps in await series.patch_subjects())
+    return any(ps.lower() in summaries for ps in await series.patch_subjects())
 
 
 def _is_outdated_pr(pr: PullRequest) -> bool:

@@ -973,7 +973,7 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         inside = ALREADY_MERGED_LOOKBACK + 55
         out = ALREADY_MERGED_LOOKBACK * 3
         series = await self._get_series(m, [f"Commit {inside}", f"Commit {out}"])
-        self.assertFalse(await _series_already_applied(self.repo, series))
+        self.assertTrue(await _series_already_applied(self.repo, series))
 
     @aioresponses()
     async def test_applied_all_case_insensitive(self, m: aioresponses):
