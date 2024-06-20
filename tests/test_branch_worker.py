@@ -29,6 +29,7 @@ from kernel_patches_daemon.branch_worker import (
     ALREADY_MERGED_LOOKBACK,
     BRANCH_TTL,
     BranchWorker,
+    build_email,
     create_color_labels,
     email_in_submitter_allowlist,
     EmailBodyContext,
@@ -38,6 +39,7 @@ from kernel_patches_daemon.branch_worker import (
     temporary_patch_file,
     UPSTREAM_REMOTE_NAME,
 )
+from kernel_patches_daemon.config import EmailConfig
 from kernel_patches_daemon.github_logs import DefaultGithubLogExtractor
 from kernel_patches_daemon.patchwork import Series, Subject
 from kernel_patches_daemon.status import Status
@@ -88,7 +90,11 @@ SERIES_DATA: Dict[str, Any] = {
     "id": 0,
     "name": "foo",
     "date": "2010-07-20T01:00:00",
-    "patches": [],
+    "patches": [
+        {
+            "msgid": "patch1-msgid@localhost",
+        }
+    ],
     "cover_letter": None,
     "version": 0,
     "url": "https://example.com",
@@ -1031,8 +1037,13 @@ class TestEmailNotificationBody(unittest.TestCase):
         self.assertEqual(expected, body)
 
 
-class TestEmailSubmitterAllowlist(unittest.TestCase):
-    def test_non_regex(self):
+class TestEmailNotification(unittest.TestCase):
+    # Fully expand all diffs
+    maxDiff = None
+
+    BOUNDARY = "================asdf"
+
+    def test_allowlist_non_regex(self):
         allowlist = [
             re.compile("asdf@gmail.com"),
             re.compile("some.email@domain.xyz"),
@@ -1054,7 +1065,7 @@ class TestEmailSubmitterAllowlist(unittest.TestCase):
                 result = email_in_submitter_allowlist(email, allowlist)
                 self.assertEqual(result, expected)
 
-    def test_regex_match(self):
+    def test_allowlist_regex_match(self):
         allowlist = [
             re.compile(r"^[a-gA-G].*"),
             re.compile(r"some.email@domain.xyz"),
@@ -1074,3 +1085,168 @@ class TestEmailSubmitterAllowlist(unittest.TestCase):
             with self.subTest(msg=email):
                 result = email_in_submitter_allowlist(email, allowlist)
                 self.assertEqual(result, expected)
+
+    def test_email_submitter_in_allowlist(self):
+        pw = get_default_pw_client()
+        series = Series(pw, SERIES_DATA)
+        config = EmailConfig(
+            smtp_host="mail.example.com",
+            smtp_port=465,
+            smtp_user="bot-bpf-ci",
+            smtp_from="bot+bpf-ci@example.com",
+            smtp_to=["email1-to@example.com", "email2-to@example.com"],
+            smtp_cc=["email1-cc@example.com", "email2-cc@example.com"],
+            smtp_pass="super-secret-is-king",
+            smtp_http_proxy="http://example.com:8080",
+            submitter_allowlist=[
+                re.compile("a-user@example.com"),
+            ],
+            ignore_allowlist=False,
+        )
+        expected_cmd = [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--ssl-reqd",
+            "smtps://mail.example.com",
+            "--mail-from",
+            "bot+bpf-ci@example.com",
+            "--user",
+            f"bot-bpf-ci:super-secret-is-king",
+            "--crlf",
+            "--upload-file",
+            "-",
+            "--mail-rcpt",
+            "email1-to@example.com",
+            "--mail-rcpt",
+            "email2-to@example.com",
+            "--mail-rcpt",
+            "a-user@example.com",
+            "--mail-rcpt",
+            "email1-cc@example.com",
+            "--mail-rcpt",
+            "email2-cc@example.com",
+            "--proxy",
+            "http://example.com:8080",
+        ]
+        expected_email = read_fixture("test_email_submitter_in_allowlist.golden")
+
+        cmd, email = build_email(
+            config,
+            series,
+            "[PATCH bpf] my subject",
+            "my-id",
+            "body body body",
+            boundary=self.BOUNDARY,
+        )
+        self.assertEqual(expected_cmd, cmd)
+        self.assertEqual(expected_email, email)
+
+    def test_email_submitter_not_in_allowlist(self):
+        pw = get_default_pw_client()
+        series = Series(pw, SERIES_DATA)
+        config = EmailConfig(
+            smtp_host="mail.example.com",
+            smtp_port=465,
+            smtp_user="bot-bpf-ci",
+            smtp_from="bot+bpf-ci@example.com",
+            smtp_to=["email1-to@example.com", "email2-to@example.com"],
+            smtp_cc=["email1-cc@example.com", "email2-cc@example.com"],
+            smtp_pass="super-secret-is-king",
+            smtp_http_proxy="http://example.com:8080",
+            submitter_allowlist=[
+                re.compile("email1-allow@example.com"),
+                re.compile("email2-allow@example.com"),
+            ],
+            ignore_allowlist=False,
+        )
+        expected_cmd = [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--ssl-reqd",
+            "smtps://mail.example.com",
+            "--mail-from",
+            "bot+bpf-ci@example.com",
+            "--user",
+            f"bot-bpf-ci:super-secret-is-king",
+            "--crlf",
+            "--upload-file",
+            "-",
+            "--mail-rcpt",
+            "email1-to@example.com",
+            "--mail-rcpt",
+            "email2-to@example.com",
+            "--mail-rcpt",
+            "email1-cc@example.com",
+            "--mail-rcpt",
+            "email2-cc@example.com",
+            "--proxy",
+            "http://example.com:8080",
+        ]
+        expected_email = read_fixture("test_email_submitter_not_in_allowlist.golden")
+
+        cmd, email = build_email(
+            config, series, "my subject", "my-id", "body body", boundary=self.BOUNDARY
+        )
+        self.assertEqual(expected_cmd, cmd)
+        self.assertEqual(expected_email, email)
+
+    def test_email_submitter_not_in_allowlist_and_allowlist_disabled(self):
+        pw = get_default_pw_client()
+        series = Series(pw, SERIES_DATA)
+        config = EmailConfig(
+            smtp_host="mail.example.com",
+            smtp_port=465,
+            smtp_user="bot-bpf-ci",
+            smtp_from="bot+bpf-ci@example.com",
+            smtp_to=["email1-to@example.com", "email2-to@example.com"],
+            smtp_cc=["email1-cc@example.com", "email2-cc@example.com"],
+            smtp_pass="super-secret-is-king",
+            smtp_http_proxy="http://example.com:8080",
+            submitter_allowlist=[
+                re.compile("email1-allow@example.com"),
+                re.compile("email2-allow@example.com"),
+            ],
+            ignore_allowlist=True,
+        )
+        expected_cmd = [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--ssl-reqd",
+            "smtps://mail.example.com",
+            "--mail-from",
+            "bot+bpf-ci@example.com",
+            "--user",
+            f"bot-bpf-ci:super-secret-is-king",
+            "--crlf",
+            "--upload-file",
+            "-",
+            "--mail-rcpt",
+            "email1-to@example.com",
+            "--mail-rcpt",
+            "email2-to@example.com",
+            "--mail-rcpt",
+            "a-user@example.com",
+            "--mail-rcpt",
+            "email1-cc@example.com",
+            "--mail-rcpt",
+            "email2-cc@example.com",
+            "--proxy",
+            "http://example.com:8080",
+        ]
+        expected_email = read_fixture(
+            "test_email_submitter_not_in_allowlist_and_allowlist_disabled.golden"
+        )
+
+        cmd, email = build_email(
+            config,
+            series,
+            "[PATCH bpf-next] some-subject",
+            "my-id",
+            "zzzzz\nzz",
+            boundary=self.BOUNDARY,
+        )
+        self.assertEqual(expected_cmd, cmd)
+        self.assertEqual(expected_email, email)

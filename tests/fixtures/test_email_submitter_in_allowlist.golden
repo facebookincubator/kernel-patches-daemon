@@ -1,0 +1,17 @@
+Content-Type: multipart/mixed; boundary="================asdf"
+MIME-Version: 1.0
+Message-Id: <my-id>
+In-Reply-To: patch1-msgid@localhost
+References: patch1-msgid@localhost
+Subject: [PATCH bpf] my subject
+From: bot+bpf-ci@example.com
+To: email1-to@example.com,email2-to@example.com,a-user@example.com
+Cc: email1-cc@example.com,email2-cc@example.com
+
+--================asdf
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+body body body
+--================asdf--

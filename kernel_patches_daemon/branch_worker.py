@@ -252,13 +252,23 @@ def email_in_submitter_allowlist(email: str, allowlist: Sequence[re.Pattern]) ->
     return any(regex.fullmatch(email) for regex in allowlist)
 
 
-async def send_email(
+def build_email(
     config: EmailConfig,
     series: Series,
     subject: str,
+    msg_id: str,
     body: str,
-):
-    """Send an email."""
+    boundary: str = "",
+) -> Tuple[List[str], str]:
+    """
+    Builds complete email (including headers) to be sent along with curl command
+    necessary to send it.
+
+    `boundary` is only used for unit tests to make the content-type boundary
+    predictable.
+
+    Returns (command, email).
+    """
     # We work with curl as it's the only thing that supports SMTP via an HTTP
     # proxy, which is something we require for production environments.
     args = [
@@ -296,7 +306,7 @@ async def send_email(
     # that is not entirely under our control, but we don't want to expose our
     # actual host name either. Collisions of a sha256 hash are assumed to be
     # unlikely in many contexts, so we do the same.
-    msg["Message-Id"] = f"<{generate_msg_id(config.smtp_host)}>"
+    msg["Message-Id"] = f"<{msg_id}>"
     msg["In-Reply-To"] = get_ci_base(series)["msgid"]
     msg["References"] = msg["In-Reply-To"]
     msg["Subject"] = subject
@@ -305,11 +315,27 @@ async def send_email(
         msg["To"] = ",".join(to_list)
     if cc_list:
         msg["Cc"] = ",".join(cc_list)
+    if boundary:
+        msg.set_boundary(boundary)
     msg.attach(MIMEText(body, "plain"))
+
+    return (args, msg.as_string())
+
+
+async def send_email(
+    config: EmailConfig,
+    series: Series,
+    subject: str,
+    body: str,
+):
+    """Send an email."""
+    msg_id = generate_msg_id(config.smtp_host)
+    curl_args, msg = build_email(config, series, subject, msg_id, body)
+
     proc = await asyncio.create_subprocess_exec(
-        *args, stdin=PIPE, stdout=PIPE, stderr=PIPE
+        *curl_args, stdin=PIPE, stdout=PIPE, stderr=PIPE
     )
-    stdout, stderr = await proc.communicate(input=msg.as_string().encode())
+    stdout, stderr = await proc.communicate(input=msg.encode())
     rc = await proc.wait()
     if rc != 0:
         logger.error(f"failed to send email: {stdout.decode()} {stderr.decode()}")
