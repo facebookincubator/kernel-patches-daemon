@@ -279,7 +279,9 @@ async def send_email(
     to_list = copy.copy(config.smtp_to)
     cc_list = copy.copy(config.smtp_cc)
 
-    if config.ignore_allowlist or series.submitter_email in config.submitter_allowlist:
+    if config.ignore_allowlist or email_in_submitter_allowlist(
+        series.submitter_email, config.submitter_allowlist
+    ):
         to_list += [series.submitter_email]
 
     for to in to_list + cc_list:
