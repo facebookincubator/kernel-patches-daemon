@@ -6,8 +6,6 @@
 
 # pyre-unsafe
 
-import importlib.resources
-import os
 import unittest
 
 from aioresponses import aioresponses
@@ -15,11 +13,7 @@ from github.WorkflowJob import WorkflowJob
 
 from kernel_patches_daemon.github_logs import BpfGithubLogExtractor, GithubFailedJobLog
 
-
-def read_fixture(filepath: str) -> str:
-    with importlib.resources.path(__package__, "fixtures") as base:
-        with open(os.path.join(base, "fixtures", filepath)) as f:
-            return f.read()
+from . import read_fixture
 
 
 class MockWorkflowJob(WorkflowJob):
