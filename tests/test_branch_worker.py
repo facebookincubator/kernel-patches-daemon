@@ -6,8 +6,6 @@
 
 # pyre-unsafe
 
-import importlib.resources
-import os
 import random
 import re
 import shutil
@@ -50,6 +48,8 @@ from tests.common.patchwork_mock import (
     get_default_pw_client,
     init_pw_responses,
 )
+
+from . import read_fixture
 
 
 TEST_REPO = "repo"
@@ -102,12 +102,6 @@ SERIES_DATA: Dict[str, Any] = {
     "submitter": {"email": "a-user@example.com"},
     "mbox": "https://example.com",
 }
-
-
-def read_fixture(filepath: str) -> str:
-    with importlib.resources.path(__package__, "fixtures") as base:
-        with open(os.path.join(base, "fixtures", filepath)) as f:
-            return f.read()
 
 
 class BranchWorkerMock(BranchWorker):
