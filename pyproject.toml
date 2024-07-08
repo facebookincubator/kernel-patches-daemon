@@ -30,11 +30,11 @@ pygithub = "^1.59.0"
 pyre-extensions = "^0.0.30"
 opentelemetry-sdk = "^1.18.0"
 python-dateutil = "^2.8.2"
-# Explicitely include cryptography package
+# Explicitly include cryptography package
 # It's required for PyJWT which is dependency of PyGithub
 # https://pyjwt.readthedocs.io/en/stable/installation.html#cryptographic-dependencies-optional
 cryptography = "^42.0.0"
-certifi = "^2023.7.22"
+certifi = "*"
 
 [tool.poetry.group.dev.dependencies]
 freezegun = "^1.2.2"
