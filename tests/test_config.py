@@ -10,19 +10,21 @@ import json
 import os
 import re
 import unittest
-from typing import Dict, Union
+from dataclasses import dataclass
+from typing import Dict, List, Union
 from unittest.mock import mock_open, patch
 
 from kernel_patches_daemon.config import (
     BranchConfig,
     EmailConfig,
     GithubAppAuthConfig,
+    InvalidConfig,
     KPDConfig,
     PatchworksConfig,
 )
 
 
-def read_fixture(filepath: str) -> Dict[str, Union[str, int, bool]]:
+def read_fixture(filepath: str) -> Dict[str, Union[str, int, bool, Dict]]:
     with open(os.path.join(os.path.dirname(__file__), filepath)) as f:
         return json.load(f)
 
@@ -30,6 +32,110 @@ def read_fixture(filepath: str) -> Dict[str, Union[str, int, bool]]:
 class TestConfig(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
+
+    def test_invalid_tag_to_branch_mapping(self) -> None:
+        """
+        Tests that if a tag is mapped to a branch that doesn't exist, an exception is raised.
+        """
+        # Load a valid config
+        kpd_config_json = read_fixture("fixtures/kpd_config.json")
+
+        @dataclass
+        class TestCase:
+            name: str
+            tag_to_branch_mapping: Dict[str, List[str]]
+
+        test_cases = [
+            TestCase(
+                name="tag mapped to a non-existent branch",
+                tag_to_branch_mapping={"tag": ["non_existent_branch"]},
+            ),
+            TestCase(
+                name="tag mapped to some branches that exists and some that don't",
+                tag_to_branch_mapping={
+                    "tag": ["app_auth_key", "non_existent_branch", "oauth"]
+                },
+            ),
+            TestCase(
+                name="__DEFAULT__ mapped to a non-existent branch",
+                tag_to_branch_mapping={"__DEFAULT__": ["non_existent_branch"]},
+            ),
+            TestCase(
+                name="__DEFAULT__ mapped to some branches that exists and some that don't",
+                tag_to_branch_mapping={
+                    "__DEFAULT__": ["app_auth_key", "non_existent_branch", "oauth"]
+                },
+            ),
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=case.name):
+                conf = kpd_config_json.copy()
+                conf["tag_to_branch_mapping"] = case.tag_to_branch_mapping
+                with self.assertRaises(InvalidConfig):
+                    KPDConfig.from_json(conf)
+
+    def test_valid_tag_to_branch_mapping(self) -> None:
+        """
+        Tests combinaisons of valid tag_to_branch_mapping setup.
+        """
+        # Load a valid config
+        kpd_config_json = read_fixture("fixtures/kpd_config.json")
+
+        @dataclass
+        class TestCase:
+            name: str
+            tag_to_branch_mapping: Dict[str, List[str]]
+
+        test_cases = [
+            TestCase(
+                name="single tag mapped to a valid branch",
+                tag_to_branch_mapping={"tag": ["oauth"]},
+            ),
+            TestCase(
+                name="multiple tags mapped to valid branches",
+                tag_to_branch_mapping={
+                    "tag1": ["app_auth_key"],
+                    "tag2": ["oauth"],
+                },
+            ),
+            TestCase(
+                name="multiple tags mapped to same branch",
+                tag_to_branch_mapping={
+                    "tag1": ["oauth"],
+                    "tag2": ["oauth"],
+                },
+            ),
+            TestCase(
+                name="tags mapped to multiple valid branch",
+                tag_to_branch_mapping={
+                    "tag1": ["oauth", "app_auth_key"],
+                    "tag2": ["oauth"],
+                },
+            ),
+            TestCase(
+                name="__DEFAULT__ mapped to a valid branch",
+                tag_to_branch_mapping={"__DEFAULT__": ["app_auth_key"]},
+            ),
+            TestCase(
+                name="__DEFAULT__ mapped to multiple valid branches",
+                tag_to_branch_mapping={"__DEFAULT__": ["app_auth_key", "oauth"]},
+            ),
+            TestCase(
+                name="tags and __DEFAULT__ mapped to multiple valid branches",
+                tag_to_branch_mapping={
+                    "tag1": ["app_auth_key"],
+                    "tag2": ["app_auth_key", "oauth"],
+                    "__DEFAULT__": ["app_auth_key"],
+                },
+            ),
+        ]
+
+        for case in test_cases:
+            with self.subTest(msg=case.name):
+                conf = kpd_config_json.copy()
+                conf["tag_to_branch_mapping"] = case.tag_to_branch_mapping
+                KPDConfig.from_json(conf)
 
     def test_valid(self) -> None:
         kpd_config_json = read_fixture("fixtures/kpd_config.json")
@@ -65,7 +171,7 @@ class TestConfig(unittest.TestCase):
                 ],
                 ignore_allowlist=True,
             ),
-            tag_to_branch_mapping={"tag": ["branch"]},
+            tag_to_branch_mapping={"tag": ["app_auth_key_path"]},
             branches={
                 "app_auth_key": BranchConfig(
                     github_app_auth=GithubAppAuthConfig(

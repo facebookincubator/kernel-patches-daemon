@@ -26,7 +26,7 @@
     },
     "tag_to_branch_mapping": {
       "tag": [
-        "branch"
+        "app_auth_key_path"
       ]
     },
     "branches": {

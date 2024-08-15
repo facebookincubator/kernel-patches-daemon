@@ -180,9 +180,19 @@ class KPDConfig:
         if version != 3:
             raise UnsupportedConfigVersion(version)
 
+        tag_to_branch_mapping = json["tag_to_branch_mapping"]
+        branch_names = json["branches"].keys()
+
+        for branches in tag_to_branch_mapping.values():
+            for branch in branches:
+                if branch not in branch_names:
+                    raise InvalidConfig(
+                        f"Branch *{branch}* in `tag_to_branch_mapping` is not defined in `branches`"
+                    )
+
         return cls(
             version=3,
-            tag_to_branch_mapping=json["tag_to_branch_mapping"],
+            tag_to_branch_mapping=tag_to_branch_mapping,
             patchwork=PatchworksConfig.from_json(json["patchwork"]),
             email=EmailConfig.from_json(json["email"]) if "email" in json else None,
             branches={
