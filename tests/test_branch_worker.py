@@ -53,13 +53,13 @@ from . import read_fixture
 
 
 TEST_REPO = "repo"
-TEST_REPO_URL = f"https://user:pass@127.0.0.1:0/org/{TEST_REPO}"
+TEST_REPO_URL = f"https://user:pass@127.0.0.1/org/{TEST_REPO}"
 TEST_REPO_BRANCH = "test_branch"
 TEST_REPO_PR_BASE_BRANCH = "test_branch_base"
 TEST_UPSTREAM_REPO_URL = "https://127.0.0.2:0/upstream_org/upstream_repo"
 TEST_UPSTREAM_BRANCH = "test_upstream_branch"
 TEST_CI_REPO = "ci-repo"
-TEST_CI_REPO_URL = f"https://user:pass@127.0.0.1:0/ci-org/{TEST_CI_REPO}"
+TEST_CI_REPO_URL = f"https://user:pass@127.0.0.1/ci-org/{TEST_CI_REPO}"
 TEST_CI_BRANCH = "test_ci_branch"
 TEST_BASE_DIRECTORY = "/repos"
 TEST_BRANCH = "test-branch"
@@ -917,7 +917,7 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         contains such commits.
         """
         data = {
-            "https://127.0.0.1:0/api/1.1/series/42/": {
+            "https://127.0.0.1/api/1.1/series/42/": {
                 "id": 42,
                 "name": "[a/b] this series is *NOT* closed!",
                 "date": "2010-07-20T01:00:00",
@@ -930,7 +930,7 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
                 "mbox": "https://example.com",
             },
             **{
-                f"https://127.0.0.1:0/api/1.1/patches/{i}/": {
+                f"https://127.0.0.1/api/1.1/patches/{i}/": {
                     "id": i,
                     "project": {"id": "1234"},
                     "delegate": {"id": "12345"},
