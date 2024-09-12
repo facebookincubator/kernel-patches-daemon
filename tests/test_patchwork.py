@@ -75,13 +75,13 @@ class TestPatchwork(PatchworkTestCase):
         self.assertEqual(json_resp["key1"], "value1")
 
     async def test_get_objects_recursive(self) -> None:
-        url = "https://127.0.0.1:0/api/1.1/projects/"
+        url = "https://127.0.0.1/api/1.1/projects/"
 
         @dataclass
         class Response:
             body: bytes
             headers: Dict[str, str]
-            url: str = "https://127.0.0.1:0/api/1.1/projects/"
+            url: str = "https://127.0.0.1/api/1.1/projects/"
             status_code: int = 200
 
         @dataclass
@@ -106,21 +106,21 @@ class TestPatchwork(PatchworkTestCase):
                         url=url,
                         body=b'["a"]',
                         headers={
-                            "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=2>; rel="next"'
+                            "Link": '<https://127.0.0.1/api/1.1/projects/?page=2>; rel="next"'
                         },
                     ),
                     Response(
                         url=url + "?page=2",
                         body=b'["b"]',
                         headers={
-                            "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=3>; rel="next", <https://127.0.0.1:0/api/1.1/projects/>; rel="prev"'
+                            "Link": '<https://127.0.0.1/api/1.1/projects/?page=3>; rel="next", <https://127.0.0.1/api/1.1/projects/>; rel="prev"'
                         },
                     ),
                     Response(
                         url=url + "?page=3",
                         body=b'["c"]',
                         headers={
-                            "Link": '<https://127.0.0.1:0/api/1.1/projects/?page=2>; rel="prev"'
+                            "Link": '<https://127.0.0.1/api/1.1/projects/?page=2>; rel="prev"'
                         },
                     ),
                 ],
@@ -181,13 +181,13 @@ class TestPatchwork(PatchworkTestCase):
         m.post(pattern, status=200)
         self._pw.auth_token = None
         await self._pw._Patchwork__try_post(
-            "https://127.0.0.1:0/some/random/url", "somerandomdata"
+            "https://127.0.0.1/some/random/url", "somerandomdata"
         )
         m.assert_not_called()
 
         self._pw.auth_token = ""
         await self._pw._Patchwork__try_post(
-            "https://127.0.0.1:0/some/random/url", "somerandomdata"
+            "https://127.0.0.1/some/random/url", "somerandomdata"
         )
         m.assert_not_called()
 
@@ -404,7 +404,7 @@ class TestSeries(PatchworkTestCase):
         CTX_URLENCODED = "vmtest+bpf-next-PR"
         EXPECTED_ID = 42
         contexts_responses = {
-            f"https://127.0.0.1:0/api/1.1/patches/12859379/checks/?context={CTX_URLENCODED}&order=-date&per_page=1": [
+            f"https://127.0.0.1/api/1.1/patches/12859379/checks/?context={CTX_URLENCODED}&order=-date&per_page=1": [
                 {
                     "context": CTX,
                     "date": "2010-01-02T00:00:00",
@@ -428,7 +428,7 @@ class TestSeries(PatchworkTestCase):
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -436,8 +436,8 @@ class TestSeries(PatchworkTestCase):
                     },
                 ],
                 # Patches without existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
-                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
@@ -450,7 +450,7 @@ class TestSeries(PatchworkTestCase):
         await series.set_check(
             context=DEFAULT_CHECK_CTX,
             status=Status.PENDING,
-            target_url="https://127.0.0.1:0/target",
+            target_url="https://127.0.0.1/target",
         )
         # Hack... aioresponses stores the requests that were made in a dictionary whose's key is a tuple,
         # of the form (method, url).
@@ -464,12 +464,12 @@ class TestSeries(PatchworkTestCase):
         """
         Test that we don't update checks if the state and target_url have not changed.
         """
-        TARGET_URL = "https://127.0.0.1:0/target"
+        TARGET_URL = "https://127.0.0.1/target"
         contexts_responses = copy.deepcopy(DEFAULT_TEST_RESPONSES)
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -478,8 +478,8 @@ class TestSeries(PatchworkTestCase):
                     },
                 ],
                 # Patches without existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
-                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
@@ -505,12 +505,12 @@ class TestSeries(PatchworkTestCase):
         """
         Test that we update checks if the state is the same, but target_url has changed.
         """
-        TARGET_URL = "https://127.0.0.1:0/target"
+        TARGET_URL = "https://127.0.0.1/target"
         contexts_responses = copy.deepcopy(DEFAULT_TEST_RESPONSES)
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -520,8 +520,8 @@ class TestSeries(PatchworkTestCase):
                     },
                 ],
                 # Patches without existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
-                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
@@ -546,12 +546,12 @@ class TestSeries(PatchworkTestCase):
         """
         Test that we update checks if the state is not the same, but target_url is.
         """
-        TARGET_URL = "https://127.0.0.1:0/target"
+        TARGET_URL = "https://127.0.0.1/target"
         contexts_responses = copy.deepcopy(DEFAULT_TEST_RESPONSES)
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -563,8 +563,8 @@ class TestSeries(PatchworkTestCase):
                     },
                 ],
                 # Patches without existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
-                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
@@ -590,12 +590,12 @@ class TestSeries(PatchworkTestCase):
         """
         Test that we do not update checks if the new state is pending and we have an existing final state.
         """
-        TARGET_URL = "https://127.0.0.1:0/target"
+        TARGET_URL = "https://127.0.0.1/target"
         contexts_responses = copy.deepcopy(DEFAULT_TEST_RESPONSES)
         contexts_responses.update(
             {
                 # Patch with existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
+                f"https://127.0.0.1/api/1.1/patches/6651/checks/{DEFAULT_CHECK_CTX_QUERY}": [
                     {
                         "context": DEFAULT_CHECK_CTX,
                         "date": "2010-01-01T00:00:00",
@@ -605,8 +605,8 @@ class TestSeries(PatchworkTestCase):
                     },
                 ],
                 # Patches without existing context
-                f"https://127.0.0.1:0/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
-                f"https://127.0.0.1:0/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6652/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
+                f"https://127.0.0.1/api/1.1/patches/6653/checks/{DEFAULT_CHECK_CTX_QUERY}": [],
             }
         )
 
