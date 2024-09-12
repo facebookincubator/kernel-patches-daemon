@@ -42,7 +42,7 @@ DEFAULT_FREEZE_DATE = "2010-07-23T00:00:00"
 
 TEST_ORG = "org"
 TEST_REPO = "repo"
-TEST_REPO_URL = f"https://user:pass@127.0.0.1:0/{TEST_ORG}/{TEST_REPO}"
+TEST_REPO_URL = f"https://user:pass@127.0.0.1/{TEST_ORG}/{TEST_REPO}"
 TEST_APP_ID = 1
 TEST_INSTALLATION_ID = 2
 TEST_PRIV_KEY: str = (
@@ -372,10 +372,10 @@ class TestGithubConnectorAuth(unittest.TestCase):
             side_effect=side_effect,
         ) as p, freeze_time(DEFAULT_FREEZE_DATE):
             gc_app_auth = get_default_gc_app_auth_client(
-                repo_url=f"https://127.0.0.1:0/{TEST_ORG}/{TEST_REPO}"
+                repo_url=f"https://127.0.0.1/{TEST_ORG}/{TEST_REPO}"
             )
             self.assertEqual(
-                f"https://test_user[bot]:token1@127.0.0.1:0/{TEST_ORG}/{TEST_REPO}",
+                f"https://test_user[bot]:token1@127.0.0.1/{TEST_ORG}/{TEST_REPO}",
                 gc_app_auth.repo_url,
             )
             self.assertEqual(p.call_count, 1)
@@ -395,8 +395,8 @@ class TestGithubConnectorAuth(unittest.TestCase):
         test_cases = [
             TestCase(
                 name="port is 0",
-                initial_url=f"https://127.0.0.1:0/{TEST_ORG}/{TEST_REPO}",
-                expected_url=f"https://test_user[bot]:token1@127.0.0.1:0/{TEST_ORG}/{TEST_REPO}",
+                initial_url=f"https://127.0.0.1/{TEST_ORG}/{TEST_REPO}",
+                expected_url=f"https://test_user[bot]:token1@127.0.0.1/{TEST_ORG}/{TEST_REPO}",
             ),
             TestCase(
                 name="port is not 0",
