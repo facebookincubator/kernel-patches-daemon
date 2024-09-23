@@ -168,6 +168,24 @@ class GithubSync(Stats):
                 if pr_to_close.title in worker.prs:
                     del worker.prs[pr_to_close.title]
 
+    async def checkout_and_patch_safe(
+        self, worker, branch_name: str, series_to_apply: Series
+    ) -> Optional[PullRequest]:
+        try:
+            self.increment_counter("all_known_subjects")
+            pr = await worker.checkout_and_patch(branch_name, series_to_apply)
+            if pr is None:
+                logging.info(
+                    f"PR associated with branch {branch_name} for series {series_to_apply.id} is closed; ignoring"
+                )
+            return pr
+        except NewPRWithNoChangeException as e:
+            self.increment_counter("empty_pr")
+            logger.exception(
+                f"Could not create PR for series {series_to_apply.id} merging {e.base_branch} into {e.target_branch} as PR would introduce no changes"
+            )
+            return None
+
     async def sync_patches(self) -> None:
         """
         One subject = one branch
@@ -239,17 +257,8 @@ class GithubSync(Stats):
                     else:
                         logging.info(msg + "no more next, staying.")
                 logging.info(f"Choosing branch {branch} to create/update PR.")
-                try:
-                    self.increment_counter("all_known_subjects")
-                    pr = await worker.checkout_and_patch(pr_branch_name, series)
-                    if pr is None:
-                        logging.info(
-                            "PR associated with branch {pr_branch_name} for series {series.id} is closed; ignoring"
-                        )
-                        continue
-                except NewPRWithNoChangeException:
-                    self.increment_counter("empty_pr")
-                    logger.exception("Could not create PR with no changes")
+                pr = await self.checkout_and_patch_safe(worker, pr_branch_name, series)
+                if pr is None:
                     continue
 
                 logging.info(
@@ -283,8 +292,11 @@ class GithubSync(Stats):
                         pr.edit(title=subject.subject)
                     branch_name = f"{await subject.branch}{HEAD_BASE_SEPARATOR}{worker.repo_branch}"
                     latest_series = await subject.latest_series or series
-                    self.increment_counter("all_known_subjects")
-                    await worker.checkout_and_patch(branch_name, latest_series)
+                    pr = await self.checkout_and_patch_safe(
+                        worker, branch_name, latest_series
+                    )
+                    if pr is None:
+                        continue
                     await worker.sync_checks(pr, latest_series)
 
             await loop.run_in_executor(None, worker.expire_branches)

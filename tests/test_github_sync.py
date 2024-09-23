@@ -10,8 +10,9 @@ import copy
 import unittest
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from kernel_patches_daemon.branch_worker import NewPRWithNoChangeException
 from kernel_patches_daemon.config import KPDConfig
 from kernel_patches_daemon.github_sync import GithubSync
 
@@ -54,7 +55,7 @@ class GithubSyncMock(GithubSync):
         super().__init__(*args, **presets)
 
 
-class TestGihubSync(unittest.TestCase):
+class TestGihubSync(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         patcher = patch("kernel_patches_daemon.github_connector.Github")
         self._gh_mock = patcher.start()
@@ -128,3 +129,37 @@ class TestGihubSync(unittest.TestCase):
             self.assertTrue("matching" not in worker.prs)
 
         matching_pr_mock.edit.assert_called_with(state="close")
+
+    async def test_checkout_and_patch_safe(self) -> None:
+        pr_branch_name = "fake_pr_branch"
+        series = MagicMock()
+        pr = MagicMock()
+        branch_worker_mock = MagicMock()
+        branch_worker_mock.checkout_and_patch = AsyncMock()
+
+        # PR generated
+        branch_worker_mock.checkout_and_patch.return_value = pr
+        self.assertEqual(
+            await self._gh.checkout_and_patch_safe(
+                branch_worker_mock, pr_branch_name, series
+            ),
+            pr,
+        )
+
+        # One patch in series failed to apply
+        branch_worker_mock.checkout_and_patch.return_value = None
+        self.assertIsNone(
+            await self._gh.checkout_and_patch_safe(
+                branch_worker_mock, pr_branch_name, series
+            )
+        )
+
+        # Series generates no changes vs target branch, likely already merged
+        branch_worker_mock.checkout_and_patch.side_effect = NewPRWithNoChangeException(
+            pr_branch_name, "target"
+        )
+        self.assertIsNone(
+            await self._gh.checkout_and_patch_safe(
+                branch_worker_mock, pr_branch_name, series
+            )
+        )

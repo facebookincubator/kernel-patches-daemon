@@ -979,6 +979,7 @@ class BranchWorker(GithubConnector):
         Patch in place and push.
         Returns true if whole series applied.
         Return None if at least one patch in series failed.
+        Raises NewPRWithNoChangeException if series would not result in any changes.
         If at least one patch in series failed nothing gets pushed.
         """
         if await self._pr_closed(branch_name, series_to_apply):
