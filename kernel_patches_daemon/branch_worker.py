@@ -448,12 +448,29 @@ async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
     return any(ps.lower() in summaries for ps in await series.patch_subjects())
 
 
-def _is_branch_changed(repo: git.Repo, old_branch: str, new_branch: str) -> bool:
+def _is_branch_changed(
+    repo: git.Repo, base_branch: str, old_branch: str, new_branch: str
+) -> bool:
     """
     Returns whether or not the new_branch (in local repo) is different from
     the old_branch (remote repo).
+
+    Note that care is taken to avoid detecting commit SHA differences. The
+    SHA is unstable even if the contents are the same. So compare the contents
+    we care about.
     """
-    return repo.git.diff(new_branch, old_branch)
+    # Check if code changes are different
+    if repo.git.diff(new_branch, old_branch):
+        return True
+
+    # Check if change metadata is different (number of commits and
+    # commit messages)
+    old_metadata = repo.git.log('--format="%B"', f"{base_branch}..{old_branch}")
+    new_metadata = repo.git.log('--format="%B"', f"{base_branch}..{new_branch}")
+    if old_metadata != new_metadata:
+        return True
+
+    return False
 
 
 def _is_outdated_pr(pr: PullRequest) -> bool:
@@ -932,12 +949,15 @@ class BranchWorker(GithubConnector):
                 has_merge_conflict=True,
                 can_create=True,
             )
-        # force push only if if's a new branch or there is code diffs between old and new branches
+        # force push only if if's a new branch or there is code or metadata diffs between old and new branches
         # which could mean that we applied new set of patches or just rebased
         if branch_name in self.branches and (
             branch_name not in self.all_prs  # NO PR yet
             or _is_branch_changed(
-                self.repo_local, f"remotes/origin/{branch_name}", branch_name
+                self.repo_local,
+                f"remotes/origin/{self.repo_pr_base_branch}",
+                f"remotes/origin/{branch_name}",
+                branch_name,
             )  # have code changes
         ):
             # we have branch, but either NO PR or there is code changes, we must try to

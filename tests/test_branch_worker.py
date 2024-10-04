@@ -6,6 +6,7 @@
 
 # pyre-unsafe
 
+import os
 import random
 import re
 import shutil
@@ -23,6 +24,7 @@ from aioresponses import aioresponses
 from freezegun import freeze_time
 from git.exc import GitCommandError
 from kernel_patches_daemon.branch_worker import (
+    _is_branch_changed,
     _series_already_applied,
     ALREADY_MERGED_LOOKBACK,
     BRANCH_TTL,
@@ -981,6 +983,153 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         in_2 = ALREADY_MERGED_LOOKBACK + 34
         series = await self._get_series(m, [f"commit {in_1}", f"[tag] COMMIT {in_2}"])
         self.assertTrue(await _series_already_applied(self.repo, series))
+
+
+class TestBranchChanged(unittest.TestCase):
+    SINGLE_COMMIT_CHANGE_MESSAGE = "single commit change\n"
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.repo = git.Repo.init(self.tmp_dir)
+
+        # So git-commit --amend doesn't error about missing configs in CI
+        self.repo.git.config("user.name", "test")
+        self.repo.git.config("user.email", "test@test.com")
+
+        # Create a file in the repository
+        with open(self.tmp_dir + "/file.txt", "w") as f:
+            f.write("Hello, world!\n")
+
+        # Create initial commit on master
+        self.repo.index.add(["file.txt"])
+        self.repo.index.commit("Initial commit\n")
+
+        # Create new branch for single commit change
+        self.repo.create_head("single_commit_change", commit="master").checkout()
+        with open(f"{self.tmp_dir}/file.txt", "a") as f:
+            f.write("line 1\n")
+            f.write("line 2\n")
+        self.repo.index.add(["file.txt"])
+        self.repo.index.commit(self.SINGLE_COMMIT_CHANGE_MESSAGE)
+
+        # Create branch for a different single commit change
+        self.repo.create_head(
+            "different_single_commit_change", commit="master"
+        ).checkout()
+        with open(f"{self.tmp_dir}/file.txt", "a") as f:
+            f.write("built different\n")
+        self.repo.index.add(["file.txt"])
+        self.repo.index.commit("different single commit change\n")
+
+        # Create duplicate branch for single commit change but with different SHA
+        self.repo.create_head(
+            "single_commit_change_clone", commit="single_commit_change"
+        ).checkout()
+        self.repo.git.commit("--amend", "--no-edit")
+
+        # Create branch to do same change but in two commits
+        self.repo.create_head("two_commit_change", commit="master").checkout()
+        for i in range(2):
+            with open(f"{self.tmp_dir}/file.txt", "a") as f:
+                f.write(f"line {i+1}\n")
+            self.repo.index.add(["file.txt"])
+            self.repo.index.commit("split change, part {i+1}\n")
+
+        # Create branch to do same change but in two commits with same duplicate
+        self.repo.create_head(
+            "two_commit_change_with_same_msg", commit="master"
+        ).checkout()
+        for i in range(2):
+            with open(f"{self.tmp_dir}/file.txt", "a") as f:
+                f.write(f"line {i+1}\n")
+            self.repo.index.add(["file.txt"])
+            self.repo.index.commit(self.SINGLE_COMMIT_CHANGE_MESSAGE)
+
+        self.repo.heads.master.checkout()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir)
+
+    def test_different_change(self):
+        self.assertTrue(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change",
+                "different_single_commit_change",
+            )
+        )
+
+    def test_duplicate_change(self):
+        self.assertFalse(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change",
+                "single_commit_change",
+            )
+        )
+        self.assertFalse(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "two_commit_change",
+                "two_commit_change",
+            )
+        )
+        self.assertFalse(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "two_commit_change_with_same_msg",
+                "two_commit_change_with_same_msg",
+            )
+        )
+        self.assertFalse(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change_clone",
+                "single_commit_change_clone",
+            )
+        )
+        self.assertFalse(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change",
+                "single_commit_change_clone",
+            )
+        )
+
+    def test_split_change(self):
+        # Double check that there are no source changes
+        self.repo.heads.single_commit_change.checkout()
+        self.assertFalse(self.repo.git.diff("two_commit_change"))
+
+        # But the varying number of commits triggers a change detection
+        self.assertTrue(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change",
+                "two_commit_change",
+            )
+        )
+
+    def test_split_duplicate_message_change(self):
+        # Double check that there are no source changes
+        self.repo.heads.single_commit_change.checkout()
+        self.assertFalse(self.repo.git.diff("two_commit_change_with_same_msg"))
+
+        self.assertTrue(
+            _is_branch_changed(
+                self.repo,
+                "master",
+                "single_commit_change",
+                "two_commit_change_with_same_msg",
+            )
+        )
 
 
 class TestEmailNotificationBody(unittest.TestCase):
