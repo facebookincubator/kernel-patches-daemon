@@ -448,6 +448,14 @@ async def _series_already_applied(repo: git.Repo, series: Series) -> bool:
     return any(ps.lower() in summaries for ps in await series.patch_subjects())
 
 
+def _is_branch_changed(repo: git.Repo, old_branch: str, new_branch: str) -> bool:
+    """
+    Returns whether or not the new_branch (in local repo) is different from
+    the old_branch (remote repo).
+    """
+    return repo.git.diff(new_branch, old_branch)
+
+
 def _is_outdated_pr(pr: PullRequest) -> bool:
     """
     Check if a pull request is outdated, i.e., whether it has not seen an update recently.
@@ -928,8 +936,8 @@ class BranchWorker(GithubConnector):
         # which could mean that we applied new set of patches or just rebased
         if branch_name in self.branches and (
             branch_name not in self.all_prs  # NO PR yet
-            or self.repo_local.git.diff(
-                branch_name, f"remotes/origin/{branch_name}"
+            or _is_branch_changed(
+                self.repo_local, f"remotes/origin/{branch_name}", branch_name
             )  # have code changes
         ):
             # we have branch, but either NO PR or there is code changes, we must try to
