@@ -16,12 +16,8 @@ from typing import Any, Dict, List, Optional, Set, Union
 from aioresponses import aioresponses
 
 from freezegun import freeze_time
-from kernel_patches_daemon.patchwork import parse_tags, RELEVANT_STATES, Subject, TTL
-from kernel_patches_daemon.status import Status
-from multidict import MultiDict
-from pyre_extensions import none_throws
 
-from tests.common.patchwork_mock import (
+from kernel.kernel_patches_daemon.oss.tests.common.patchwork_mock import (
     DEFAULT_CHECK_CTX,
     DEFAULT_CHECK_CTX_QUERY,
     DEFAULT_FREEZE_DATE,
@@ -32,6 +28,10 @@ from tests.common.patchwork_mock import (
     get_dict_key,
     init_pw_responses,
 )
+from kernel_patches_daemon.patchwork import parse_tags, RELEVANT_STATES, Subject, TTL
+from kernel_patches_daemon.status import Status
+from multidict import MultiDict
+from pyre_extensions import none_throws
 
 
 class PatchworkTestCase(unittest.IsolatedAsyncioTestCase):
