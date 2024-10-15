@@ -17,7 +17,7 @@ from kernel_patches_daemon.config import KPDConfig
 from kernel_patches_daemon.github_sync import GithubSync
 
 TEST_BRANCH = "test-branch"
-TEST_CONFIG: Dict[str, Any] = {
+TEST_CONFIG: dict[str, Any] = {
     "version": 3,
     "patchwork": {
         "project": "test",
@@ -41,7 +41,7 @@ TEST_CONFIG: Dict[str, Any] = {
 
 class GithubSyncMock(GithubSync):
     def __init__(
-        self, kpd_config: Optional[KPDConfig] = None, *args: Any, **kwargs: Any
+        self, kpd_config: KPDConfig | None = None, *args: Any, **kwargs: Any
     ) -> None:
         if kpd_config is None:
             kpd_config = KPDConfig.from_json(TEST_CONFIG)
@@ -72,7 +72,7 @@ class TestGihubSync(unittest.IsolatedAsyncioTestCase):
         class TestCase:
             name: str
             prefix: str
-            base_dir: Optional[str] = None
+            base_dir: str | None = None
 
         test_cases = [
             TestCase(

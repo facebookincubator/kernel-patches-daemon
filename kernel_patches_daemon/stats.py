@@ -8,14 +8,15 @@
 
 import logging
 import time
-from typing import Dict, Iterable, Optional, Set, Union
+from collections.abc import Iterable
+from typing import Dict, Optional, Set, Union
 
 from opentelemetry import metrics
 from opentelemetry.util.types import Attributes
 from pyre_extensions import none_throws
 
 STATS_KEY_BUG: str = "bug_occurence"
-DEFAULT_STATS: Set[str] = {STATS_KEY_BUG}
+DEFAULT_STATS: set[str] = {STATS_KEY_BUG}
 
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 class Timer:
     def __init__(self) -> None:
-        self._start_time: Optional[int] = None
+        self._start_time: int | None = None
 
     def __enter__(self):
         self.start()
@@ -57,7 +58,7 @@ class Timer:
 
 class HistogramMetricTimer(Timer):
     def __init__(
-        self, metric: metrics.Histogram, attributes: Optional[Attributes] = None
+        self, metric: metrics.Histogram, attributes: Attributes | None = None
     ) -> None:
         self.metric: metrics.Histogram = metric
         self.attributes = attributes
@@ -70,8 +71,8 @@ class HistogramMetricTimer(Timer):
 
 class Stats:
     def __init__(self, counters: Iterable[str]) -> None:
-        self.counters: Set[str] = set(counters)
-        self.stats: Dict = {}
+        self.counters: set[str] = set(counters)
+        self.stats: dict = {}
         self.drop_counters()
 
     def drop_counters(self) -> None:
@@ -85,7 +86,7 @@ class Stats:
             self.stats[STATS_KEY_BUG] += 1
             logger.error(f"Failed to add {increment} increment to '{key}' stat")
 
-    def set_counter(self, key: str, value: Union[int, float]) -> None:
+    def set_counter(self, key: str, value: int | float) -> None:
         try:
             self.stats[key] = value
         except Exception:

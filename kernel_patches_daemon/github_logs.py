@@ -11,7 +11,8 @@ import io
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Final, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Final, List, Optional
 
 import aiohttp
 from github.WorkflowJob import WorkflowJob
@@ -58,7 +59,7 @@ class GithubLogExtractor(ABC):
     @abstractmethod
     async def extract_failed_logs(
         self, jobs: Sequence[WorkflowJob]
-    ) -> List[GithubFailedJobLog]:
+    ) -> list[GithubFailedJobLog]:
         """
         Given a list of workflow jobs, `jobs`, filter out all the successful
         jobs. For the remaining failed jobs, pull out output logs. The logs
@@ -80,7 +81,7 @@ class GithubLogExtractor(ABC):
 class DefaultGithubLogExtractor(GithubLogExtractor):
     async def extract_failed_logs(
         self, jobs: Sequence[WorkflowJob]
-    ) -> List[GithubFailedJobLog]:
+    ) -> list[GithubFailedJobLog]:
         """Metadata parsing is tree-specific. So by default it's safer to do nothing."""
         return []
 
@@ -97,7 +98,7 @@ class BpfGithubLogExtractor(GithubLogExtractor):
 
     def __init__(self) -> None:
         # Needs to be initialized in async function
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Return cached http session; creating if not already created"""
@@ -107,7 +108,7 @@ class BpfGithubLogExtractor(GithubLogExtractor):
 
         return self._session
 
-    async def _extract_job_log(self, job: WorkflowJob) -> Optional[GithubFailedJobLog]:
+    async def _extract_job_log(self, job: WorkflowJob) -> GithubFailedJobLog | None:
         status = gh_conclusion_to_status(job.conclusion)
         if status != Status.FAILURE:
             return None
@@ -147,7 +148,7 @@ class BpfGithubLogExtractor(GithubLogExtractor):
 
     async def extract_failed_logs(
         self, jobs: Sequence[WorkflowJob]
-    ) -> List[GithubFailedJobLog]:
+    ) -> list[GithubFailedJobLog]:
         tasks = [asyncio.create_task(self._extract_job_log(job)) for job in jobs]
         results = await asyncio.gather(*tasks)
         return [result for result in results if result is not None]

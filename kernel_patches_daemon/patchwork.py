@@ -11,9 +11,10 @@ import datetime
 import json
 import logging
 import re
+from collections.abc import Sequence
 from functools import update_wrapper
 from types import SimpleNamespace
-from typing import Any, AnyStr, Dict, Final, List, Optional, Sequence, Set, Tuple
+from typing import Any, AnyStr, Dict, Final, List, Optional, Set, Tuple
 from urllib.parse import urljoin
 
 import aiohttp
@@ -32,7 +33,7 @@ from pyre_extensions import none_throws
 DEFAULT_HTTP_RETRIES = 3
 
 # when we want to push this patch through CI
-RELEVANT_STATES: Dict[str, int] = {
+RELEVANT_STATES: dict[str, int] = {
     "new": 1,
     "under-review": 2,
     "rfc": 5,
@@ -45,7 +46,7 @@ RFC_TAG: str = "RFC"
 TTL = {"changes-requested": 3600, "rfc": 3600}
 
 # when we are not interested in this patch anymore
-IRRELEVANT_STATES: Dict[str, int] = {
+IRRELEVANT_STATES: dict[str, int] = {
     "rejected": 4,
     "accepted": 3,
     "not-applicable": 6,
@@ -56,11 +57,11 @@ IRRELEVANT_STATES: Dict[str, int] = {
     "handled-elsewhere": 17,
 }
 
-PW_CHECK_PENDING_STATES: Dict[Status, str] = {
+PW_CHECK_PENDING_STATES: dict[Status, str] = {
     Status.PENDING: "pending",
 }
 
-PW_CHECK_CONCLUSIVE_STATES: Dict[Status, str] = {
+PW_CHECK_CONCLUSIVE_STATES: dict[Status, str] = {
     Status.SUCCESS: "success",
     Status.SKIPPED: "success",
     Status.FAILURE: "fail",
@@ -68,7 +69,7 @@ PW_CHECK_CONCLUSIVE_STATES: Dict[Status, str] = {
 }
 
 
-PW_CHECK_STATES: Dict[Status, str] = {
+PW_CHECK_STATES: dict[Status, str] = {
     **PW_CHECK_PENDING_STATES,
     **PW_CHECK_CONCLUSIVE_STATES,
 }
@@ -105,8 +106,8 @@ class TraceContext(SimpleNamespace):
     by using the handlers `on_request_start` and `on_request_end` respectively.
     """
 
-    start: Optional[float] = None
-    end: Optional[float] = None
+    start: float | None = None
+    end: float | None = None
 
     def elapsed(self) -> float:
         return none_throws(self.end) - none_throws(self.start)
@@ -207,7 +208,7 @@ def time_since_secs(date: str) -> float:
     return duration.total_seconds()
 
 
-def parse_tags(input: str) -> Set[str]:
+def parse_tags(input: str) -> set[str]:
     # "[tag1 ,tag2]title" -> "tag1,tags" -> ["tag1", "tag2"]
     try:
         parsed_tags = none_throws(re.match(TAG_REGEXP, input)).group("tags").split(",")
@@ -289,7 +290,7 @@ class Subject:
         self.subject = subject
 
     @property
-    async def branch(self) -> Optional[str]:
+    async def branch(self) -> str | None:
         relevant_series = await self.relevant_series
         if len(relevant_series) == 0:
             return None
@@ -304,7 +305,7 @@ class Subject:
 
     @property
     @cached(cache=TTLCache(maxsize=1, ttl=600))
-    async def relevant_series(self) -> List["Series"]:
+    async def relevant_series(self) -> list["Series"]:
         """
         cache and return sorted list of relevant series
         where first element is first known version of same subject
@@ -337,7 +338,7 @@ class Subject:
 
 
 class Series:
-    def __init__(self, pw_client: "Patchwork", data: Dict) -> None:
+    def __init__(self, pw_client: "Patchwork", data: dict) -> None:
         self.pw_client = pw_client
         self.data = data
         self._patch_blob = None
@@ -374,7 +375,7 @@ class Series:
                 f"Failed to parse subject from series name '{data['name']}'"
             ) from ex
 
-    def _is_patch_matching(self, patch: Dict[str, Any]) -> bool:
+    def _is_patch_matching(self, patch: dict[str, Any]) -> bool:
         for pattern in self.pw_client.search_patterns:
             for prop_name, expected_value in pattern.items():
                 if prop_name in PATCH_FILTERING_PROPERTIES:
@@ -394,7 +395,7 @@ class Series:
         return time_since_secs(self.date)
 
     @cached(cache=TTLCache(maxsize=1, ttl=600))
-    async def get_patches(self) -> Tuple[Dict]:
+    async def get_patches(self) -> tuple[dict]:
         """
         Returns patches preserving original order
         for the most recent relevant series
@@ -413,7 +414,7 @@ class Series:
         return False
 
     @cached(cache=TTLCache(maxsize=1, ttl=120))
-    async def all_tags(self) -> Set[str]:
+    async def all_tags(self) -> set[str]:
         """
         Tags fetched from series name, diffs and cover letter
         for most relevant series
@@ -431,14 +432,14 @@ class Series:
 
         return tags
 
-    async def visible_tags(self) -> Set[str]:
+    async def visible_tags(self) -> set[str]:
         return {
             f"V{self.version}",
             *[diff["state"] for diff in await self.get_patches()],
         }
 
     @cached(cache=TTLCache(maxsize=1, ttl=120))
-    async def patch_subjects(self) -> List[str]:
+    async def patch_subjects(self) -> list[str]:
         """
         Returns an ordered list of all patch subjects (tags removed)
         """
@@ -505,8 +506,8 @@ class Patchwork:
     def __init__(
         self,
         server: str,
-        search_patterns: List[Dict[str, Any]],
-        auth_token: Optional[str] = None,
+        search_patterns: list[dict[str, Any]],
+        auth_token: str | None = None,
         lookback_in_days: int = 7,
         api_version: str = "1.2",
         http_retries: int = DEFAULT_HTTP_RETRIES,
@@ -518,8 +519,8 @@ class Patchwork:
         self.search_patterns = search_patterns
         self.since = self.format_since(lookback_in_days)
         # member variable initializations
-        self.known_series: Dict[int, Series] = {}
-        self.known_subjects: Dict[str, Subject] = {}
+        self.known_series: dict[int, Series] = {}
+        self.known_subjects: dict[str, Subject] = {}
 
         # aiohttp's ClientSession needs to be initialized within an async function.
         # We will differ this initialization to a separate function and memoize it during first call.
@@ -557,7 +558,7 @@ class Patchwork:
         return lookback.strftime("%Y-%m-%dT%H:%M:%S")
 
     async def __get(
-        self, path: AnyStr, allow_redirects=True, **kwargs: Dict
+        self, path: AnyStr, allow_redirects=True, **kwargs: dict
     ) -> aiohttp.ClientResponse:
         http_session = await self.get_http_session()
         resp = await http_session.get(
@@ -568,13 +569,13 @@ class Patchwork:
         )
         return resp
 
-    async def __get_object_by_id(self, object_type: str, object_id: int) -> Dict:
+    async def __get_object_by_id(self, object_type: str, object_id: int) -> dict:
         resp = await self.__get(f"{object_type}/{object_id}/")
         return await resp.json()
 
     async def __get_objects_recursive(
-        self, object_type: str, params: Optional[Dict] = None
-    ) -> List[Dict]:
+        self, object_type: str, params: dict | None = None
+    ) -> list[dict]:
         items = []
         path = f"{object_type}/"
         if params is None:
@@ -592,7 +593,7 @@ class Patchwork:
             path = str(response.links["next"]["url"])
         return items
 
-    async def __post(self, path: AnyStr, data: Dict) -> aiohttp.ClientResponse:
+    async def __post(self, path: AnyStr, data: dict) -> aiohttp.ClientResponse:
         http_session = await self.get_http_session()
         resp = await http_session.post(
             # pyre-ignore
@@ -603,8 +604,8 @@ class Patchwork:
         return resp
 
     async def __try_post(
-        self, path: AnyStr, data: Dict
-    ) -> Optional[aiohttp.ClientResponse]:
+        self, path: AnyStr, data: dict
+    ) -> aiohttp.ClientResponse | None:
         if not self.auth_token:
             logger.debug(f"Patchwork POST {path}: read-only mode, request ignored")
             logger.debug(f"Patchwork POST data: {json_pprint(data)}")
@@ -620,7 +621,7 @@ class Patchwork:
         self,
         patch_id: int,
         context: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Return dict of the latest check with matching context and patch_id if exists.
         Returns None if such check does not exist.
@@ -648,8 +649,8 @@ class Patchwork:
         return checks[0]
 
     async def post_check_for_patch_id(
-        self, patch_id: int, status: Status, check_data: Dict[str, Any]
-    ) -> Optional[aiohttp.ClientResponse]:
+        self, patch_id: int, status: Status, check_data: dict[str, Any]
+    ) -> aiohttp.ClientResponse | None:
         new_state = PW_CHECK_STATES.get(status, PW_CHECK_STATES[Status.PENDING])
         updated_check_data = {
             **check_data,
@@ -763,7 +764,7 @@ class Patchwork:
             # async function used to fetch latest series for each subject concurrently
             async def fetch_latest_series(
                 subject_name, subject_obj
-            ) -> Tuple[str, Series, Optional[Series]]:
+            ) -> tuple[str, Series, Series | None]:
                 return (subject_name, subject_obj, await subject_obj.latest_series)
 
             tasks = [fetch_latest_series(k, v) for k, v in subjects.items()]
@@ -795,10 +796,10 @@ class Patchwork:
         logger.info(f"Total relevant subjects found: {len(filtered_subjects)}")
         return filtered_subjects
 
-    async def get_patch_by_id(self, id: int) -> Dict:
+    async def get_patch_by_id(self, id: int) -> dict:
         return await self.__get_object_by_id("patches", id)
 
-    async def get_series(self, params: Optional[Dict]) -> List[Series]:
+    async def get_series(self, params: dict | None) -> list[Series]:
         return [
             Series(self, json)
             for json in await self.__get_objects_recursive("series", params=params)

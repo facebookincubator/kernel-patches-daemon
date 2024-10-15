@@ -36,7 +36,7 @@ class ScriptMetricsExporter:
     def __init__(self, script: str) -> None:
         self.script = script
 
-    def export(self, project: str, metrics: Dict) -> None:
+    def export(self, project: str, metrics: dict) -> None:
         if os.path.isfile(self.script) and os.access(self.script, os.X_OK):
             p = Popen([self.script], stdout=PIPE, stdin=PIPE, stderr=PIPE)
             p.communicate(input=json.dumps(metrics).encode())

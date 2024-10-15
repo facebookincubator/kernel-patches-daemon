@@ -19,6 +19,7 @@ import shutil
 import tempfile
 import time
 from collections import namedtuple
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
@@ -27,7 +28,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE
-from typing import Any, Dict, Final, Generator, IO, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Final, IO, List, Optional, Tuple
 
 import dateutil.parser
 import git
@@ -160,7 +161,7 @@ class NewPRWithNoChangeException(Exception):
         )
 
 
-def get_ci_base(series: Series) -> Dict:
+def get_ci_base(series: Series) -> dict:
     """Retrieve the object (cover letter or patch) that we use as the base for
     sending emails in response to.
     """
@@ -259,7 +260,7 @@ def build_email(
     msg_id: str,
     body: str,
     boundary: str = "",
-) -> Tuple[List[str], str]:
+) -> tuple[list[str], str]:
     """
     Builds complete email (including headers) to be sent along with curl command
     necessary to send it.
@@ -353,13 +354,11 @@ def execute_command(cmd: str) -> None:
     os.system(cmd)
 
 
-def _uniq_tmp_folder(
-    url: Optional[str], branch: Optional[str], base_directory: str
-) -> str:
+def _uniq_tmp_folder(url: str | None, branch: str | None, base_directory: str) -> str:
     # use same folder for multiple invocation to avoid cloning whole tree every time
     # but use different folder for different workers identified by url and branch name
     sha = hashlib.sha256()
-    sha.update(f"{url}/{branch}".encode("utf-8"))
+    sha.update(f"{url}/{branch}".encode())
     # pyre-fixme[6]: For 1st argument expected `PathLike[Variable[AnyStr <: [str,
     #  bytes]]]` but got `Optional[str]`.
     repo_name = remove_unsafe_chars(os.path.basename(url))
@@ -380,9 +379,9 @@ def temporary_patch_file(content: bytes) -> Generator[IO, None, None]:
         tmp_patch_file.close()
 
 
-def create_color_labels(labels_cfg: Dict[str, str], repo: Repository) -> None:
-    repo_labels: Dict[str, GithubLabel] = {x.name.lower(): x for x in repo.get_labels()}
-    labels_cfg: Dict[str, str] = {k.lower(): v for k, v in labels_cfg.items()}
+def create_color_labels(labels_cfg: dict[str, str], repo: Repository) -> None:
+    repo_labels: dict[str, GithubLabel] = {x.name.lower(): x for x in repo.get_labels()}
+    labels_cfg: dict[str, str] = {k.lower(): v for k, v in labels_cfg.items()}
 
     for label, color in labels_cfg.items():
         if repo_label := repo_labels.get(label):
@@ -504,7 +503,7 @@ class BranchWorker(GithubConnector):
     def __init__(
         self,
         patchwork: Patchwork,
-        labels_cfg: Dict[str, Any],
+        labels_cfg: dict[str, Any],
         repo_branch: str,
         repo_url: str,
         upstream_url: str,
@@ -513,10 +512,10 @@ class BranchWorker(GithubConnector):
         ci_repo_url: str,
         ci_branch: str,
         log_extractor: GithubLogExtractor,
-        github_oauth_token: Optional[str] = None,
-        app_auth: Optional[Auth.AppInstallationAuth] = None,
-        email: Optional[EmailConfig] = None,
-        http_retries: Optional[int] = None,
+        github_oauth_token: str | None = None,
+        app_auth: Auth.AppInstallationAuth | None = None,
+        email: EmailConfig | None = None,
+        http_retries: int | None = None,
     ) -> None:
         super().__init__(
             repo_url=repo_url,
@@ -548,7 +547,7 @@ class BranchWorker(GithubConnector):
         create_color_labels(labels_cfg, self.repo)
         # member variables
         self.branches = {}
-        self.prs: Dict[str, PullRequest] = {}
+        self.prs: dict[str, PullRequest] = {}
         self.all_prs = {}
         self._closed_prs = None
 
@@ -565,7 +564,7 @@ class BranchWorker(GithubConnector):
         try:
             pr.create_issue_comment(message)
         except GithubException as e:
-            if not isinstance(e.data, Dict):
+            if not isinstance(e.data, dict):
                 raise e
             emsg = e.data.get("message")
             if emsg is not None and emsg in KNOWN_OK_COMMENT_EXCEPTIONS:
@@ -577,7 +576,7 @@ class BranchWorker(GithubConnector):
 
     def _update_e2e_pr(
         self, title: str, base_branch: str, branch: str, has_codechange: bool
-    ) -> Optional[PullRequest]:
+    ) -> PullRequest | None:
         """Check if there is open PR on e2e branch, reopen if necessary."""
         pr = None
 
@@ -598,9 +597,7 @@ class BranchWorker(GithubConnector):
 
         return pr
 
-    def update_e2e_test_branch_and_update_pr(
-        self, branch: str
-    ) -> Optional[PullRequest]:
+    def update_e2e_test_branch_and_update_pr(self, branch: str) -> PullRequest | None:
         base_branch = branch + "_base"
         branch_name = branch + "_test"
 
@@ -724,8 +721,8 @@ class BranchWorker(GithubConnector):
         pr.edit(state="closed")
 
     async def _guess_pr(
-        self, series: Series, branch: Optional[str] = None
-    ) -> Optional[PullRequest]:
+        self, series: Series, branch: str | None = None
+    ) -> PullRequest | None:
         """
         Series could change name
         first series in a subject could be changed as well
@@ -757,11 +754,11 @@ class BranchWorker(GithubConnector):
         self,
         series: Series,
         branch_name: str,
-        message: Optional[str] = None,
+        message: str | None = None,
         can_create: bool = False,
         close: bool = False,
         has_merge_conflict: bool = False,
-    ) -> Optional[PullRequest]:
+    ) -> PullRequest | None:
         """
         Appends comment to a PR.
         """
@@ -897,7 +894,7 @@ class BranchWorker(GithubConnector):
 
     async def try_apply_mailbox_series(
         self, branch_name: str, series: Series
-    ) -> Tuple[bool, Optional[Exception], Optional[Any]]:
+    ) -> tuple[bool, Exception | None, Any | None]:
         """Try to apply a mailbox series and return (True, None, None) if successful"""
         # The pull request will be created against `repo_pr_base_branch`. So
         # prepare it for that.
@@ -919,7 +916,7 @@ class BranchWorker(GithubConnector):
 
     async def apply_push_comment(
         self, branch_name: str, series: Series
-    ) -> Optional[PullRequest]:
+    ) -> PullRequest | None:
         comment = (
             f"Upstream branch: {self.upstream_sha}\nseries: {series.web_url}\n"
             f"version: {series.version}\n"
@@ -1002,7 +999,7 @@ class BranchWorker(GithubConnector):
 
     async def checkout_and_patch(
         self, branch_name: str, series_to_apply: Series
-    ) -> Optional[PullRequest]:
+    ) -> PullRequest | None:
         """
         Patch in place and push.
         Returns true if whole series applied.
@@ -1052,7 +1049,7 @@ class BranchWorker(GithubConnector):
             return True
         return False
 
-    def closed_prs(self) -> List[Any]:
+    def closed_prs(self) -> list[Any]:
         # GH api is not working: https://github.community/t/is-api-head-filter-even-working/135530
         # so i have to implement local cache
         # and local search
@@ -1064,7 +1061,7 @@ class BranchWorker(GithubConnector):
             )
         return self._closed_prs
 
-    def filter_closed_pr(self, head: str) -> Optional[PullRequest]:
+    def filter_closed_pr(self, head: str) -> PullRequest | None:
         # this assumes only the most recent one closed PR per head
         res = None
         for pr in self.closed_prs():
@@ -1095,7 +1092,7 @@ class BranchWorker(GithubConnector):
 
         logger.info(f"Fetching workflow runs for {pr}: {pr.head.ref} (@ {pr.head.sha})")
 
-        statuses: List[Status] = []
+        statuses: list[Status] = []
         jobs = []
 
         # Note that we are interested in listing *all* runs and not just, say,
@@ -1165,7 +1162,7 @@ class BranchWorker(GithubConnector):
         await self.evaluate_ci_result(status, series, pr, jobs)
 
     async def evaluate_ci_result(
-        self, status: Status, series: Series, pr: PullRequest, jobs: List[WorkflowJob]
+        self, status: Status, series: Series, pr: PullRequest, jobs: list[WorkflowJob]
     ) -> None:
         """Evaluate the result of a CI run and send an email as necessary."""
         email = self.email
