@@ -23,12 +23,6 @@ from aioresponses import aioresponses
 
 from freezegun import freeze_time
 from git.exc import GitCommandError
-
-from kernel.kernel_patches_daemon.oss.tests.common.patchwork_mock import (
-    DEFAULT_TEST_RESPONSES,
-    get_default_pw_client,
-    init_pw_responses,
-)
 from kernel_patches_daemon.branch_worker import (
     _is_branch_changed,
     _series_already_applied,
@@ -50,6 +44,12 @@ from kernel_patches_daemon.github_logs import DefaultGithubLogExtractor
 from kernel_patches_daemon.patchwork import Series, Subject
 from kernel_patches_daemon.status import Status
 from munch import Munch, munchify
+
+from tests.common.patchwork_mock import (
+    DEFAULT_TEST_RESPONSES,
+    get_default_pw_client,
+    init_pw_responses,
+)
 
 from . import read_fixture
 
