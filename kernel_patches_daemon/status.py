@@ -6,9 +6,8 @@
 
 # pyre-unsafe
 
-from collections.abc import Iterable
 from enum import Enum
-from typing import Optional
+from typing import Iterable, Optional
 
 
 class Status(Enum):
@@ -19,7 +18,7 @@ class Status(Enum):
     CONFLICT = "conflict"
 
 
-def gh_conclusion_to_status(gh_conclusion: str | None) -> Status:
+def gh_conclusion_to_status(gh_conclusion: Optional[str]) -> Status:
     """Translate a GitHub conclusion to our `Status` enum."""
     # GitHub reports pending jobs with a `None` conclusion.
     if gh_conclusion is None:

@@ -44,7 +44,7 @@ class GithubAppAuthConfig:
             ) from e
 
     @classmethod
-    def from_json(cls, json: dict) -> "GithubAppAuthConfig":
+    def from_json(cls, json: Dict) -> "GithubAppAuthConfig":
         private_key_config = json.keys() & {
             "private_key",
             "private_key_path",
@@ -78,12 +78,12 @@ class BranchConfig:
     upstream_branch: str
     ci_repo: str
     ci_branch: str
-    github_oauth_token: str | None
-    github_app_auth: GithubAppAuthConfig | None
+    github_oauth_token: Optional[str]
+    github_app_auth: Optional[GithubAppAuthConfig]
 
     @classmethod
-    def from_json(cls, json: dict) -> "BranchConfig":
-        github_app_auth_config: GithubAppAuthConfig | None = None
+    def from_json(cls, json: Dict) -> "BranchConfig":
+        github_app_auth_config: Optional[GithubAppAuthConfig] = None
         if app_auth_json := json.get("github_app_auth"):
             try:
                 github_app_auth_config = GithubAppAuthConfig.from_json(app_auth_json)
@@ -108,21 +108,21 @@ class EmailConfig:
     smtp_user: str
     smtp_from: str
     smtp_pass: str
-    smtp_to: list[str]
-    smtp_cc: list[str]
-    smtp_http_proxy: str | None
+    smtp_to: List[str]
+    smtp_cc: List[str]
+    smtp_http_proxy: Optional[str]
     # List of email addresses of patch submitters to whom we send email
     # notifications only for *their* very submission. This attribute is meant to
     # be temporary while the email notification feature is being rolled out.
     # Once we send email notifications to all patch submitters it can be
     # removed.
-    submitter_allowlist: list[re.Pattern]
+    submitter_allowlist: List[re.Pattern]
     # Ignore the `submitter_allowlist` entries and send emails to all patch
     # submitters, unconditionally.
     ignore_allowlist: bool
 
     @classmethod
-    def from_json(cls, json: dict) -> "EmailConfig":
+    def from_json(cls, json: Dict) -> "EmailConfig":
         return cls(
             smtp_host=json["host"],
             smtp_port=json.get("port", 465),
@@ -143,13 +143,13 @@ class EmailConfig:
 class PatchworksConfig:
     base_url: str
     project: str
-    search_patterns: list[dict]
+    search_patterns: List[Dict]
     lookback: int
-    user: str | None
-    token: str | None
+    user: Optional[str]
+    token: Optional[str]
 
     @classmethod
-    def from_json(cls, json: dict) -> "PatchworksConfig":
+    def from_json(cls, json: Dict) -> "PatchworksConfig":
         return cls(
             base_url=json["server"],
             project=json["project"],
@@ -164,13 +164,13 @@ class PatchworksConfig:
 class KPDConfig:
     version: int
     patchwork: PatchworksConfig
-    email: EmailConfig | None
-    branches: dict[str, BranchConfig]
-    tag_to_branch_mapping: dict[str, list[str]]
+    email: Optional[EmailConfig]
+    branches: Dict[str, BranchConfig]
+    tag_to_branch_mapping: Dict[str, List[str]]
     base_directory: str
 
     @classmethod
-    def from_json(cls, json: dict) -> "KPDConfig":
+    def from_json(cls, json: Dict) -> "KPDConfig":
         try:
             version = int(json["version"])
         except (KeyError, IndexError) as e:

@@ -61,9 +61,9 @@ class GithubConnector:
     def __init__(
         self,
         repo_url: str,
-        github_oauth_token: str | None = None,
-        app_auth: Auth.AppInstallationAuth | None = None,
-        http_retries: int | None = None,
+        github_oauth_token: Optional[str] = None,
+        app_auth: Optional[Auth.AppInstallationAuth] = None,
+        http_retries: Optional[int] = None,
     ) -> None:
 
         assert bool(github_oauth_token) ^ bool(

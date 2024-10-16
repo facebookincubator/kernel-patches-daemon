@@ -80,17 +80,17 @@ class TestPatchwork(PatchworkTestCase):
         @dataclass
         class Response:
             body: bytes
-            headers: dict[str, str]
+            headers: Dict[str, str]
             url: str = "https://127.0.0.1/api/1.1/projects/"
             status_code: int = 200
 
         @dataclass
         class TestCase:
             name: str
-            pages: list[Response]
-            expected: list[Any]
+            pages: List[Response]
+            expected: List[Any]
             get_calls: int
-            filters: dict[str, str] | MultiDict | None = None
+            filters: Optional[Union[Dict[str, str], MultiDict]] = None
 
         test_cases = [
             TestCase(
@@ -231,7 +231,7 @@ class TestPatchwork(PatchworkTestCase):
         class TestCase:
             name: str
             title: str
-            expected: set[str]
+            expected: Set[str]
 
         test_cases = [
             TestCase(

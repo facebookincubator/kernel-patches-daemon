@@ -32,7 +32,7 @@ from kernel_patches_daemon.github_connector import (
 # unfortunately, this has the side effect of not freezing the time for the github
 # package... Here we are popping anything that could get in the way from the dfault list
 # https://github.com/spulec/freezegun/issues/484
-default_ignore_list: list[str] = [
+default_ignore_list: List[str] = [
     x for x in freezegun.config.DEFAULT_IGNORE_LIST if not "github".startswith(x)
 ]
 # pyre-fixme[16]: Module freezegun has no attribute configure
@@ -179,8 +179,8 @@ class TestGithubConnector(unittest.TestCase):
         @dataclass
         class TestCase:
             name: str
-            oauth_token: str | None = "some oauth token"
-            app_auth: AppAuthentication | None = AppAuthentication(
+            oauth_token: Optional[str] = "some oauth token"
+            app_auth: Optional[AppAuthentication] = AppAuthentication(
                 TEST_APP_ID, TEST_PRIV_KEY, TEST_INSTALLATION_ID
             )
             exception_expected: bool = True
