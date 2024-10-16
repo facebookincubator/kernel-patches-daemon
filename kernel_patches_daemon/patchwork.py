@@ -14,7 +14,7 @@ import re
 from collections.abc import Sequence
 from functools import update_wrapper
 from types import SimpleNamespace
-from typing import Any, AnyStr, Dict, Final, List, Optional, Set, Tuple
+from typing import Any, AnyStr, Final, Optional
 from urllib.parse import urljoin
 
 import aiohttp

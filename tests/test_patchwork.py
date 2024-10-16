@@ -11,7 +11,7 @@ import datetime
 import re
 import unittest
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any
 
 from aioresponses import aioresponses
 

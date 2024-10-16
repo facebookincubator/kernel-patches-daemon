@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Sequence
-from typing import Dict, Final, List, Optional
+from typing import Final
 
 from github import Auth
 from github.PullRequest import PullRequest

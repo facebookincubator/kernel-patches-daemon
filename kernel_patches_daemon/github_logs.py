@@ -12,7 +12,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Final, List, Optional
+from typing import Final
 
 import aiohttp
 from github.WorkflowJob import WorkflowJob
