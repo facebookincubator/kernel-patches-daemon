@@ -65,7 +65,7 @@ TEST_CI_REPO_URL = f"https://user:pass@127.0.0.1/ci-org/{TEST_CI_REPO}"
 TEST_CI_BRANCH = "test_ci_branch"
 TEST_BASE_DIRECTORY = "/repos"
 TEST_BRANCH = "test-branch"
-TEST_CONFIG: dict[str, Any] = {
+TEST_CONFIG: Dict[str, Any] = {
     "version": 2,
     "project": "test",
     "pw_url": "pw",
@@ -88,7 +88,7 @@ TEST_LABELS_CFG = {
     "RFC": "f2e318",
     "new": "c2e0c6",
 }
-SERIES_DATA: dict[str, Any] = {
+SERIES_DATA: Dict[str, Any] = {
     "id": 0,
     "name": "foo",
     "date": "2010-07-20T01:00:00",
@@ -179,7 +179,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         @dataclass
         class TestCase:
             name: str
-            prs: list[PR]
+            prs: List[PR]
             added_pr_delta: int = 0
             relevant_prs_delta: int = 0
 
@@ -555,7 +555,7 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
         @dataclass
         class TestCase:
             name: str
-            closed_prs: list[Munch]
+            closed_prs: List[Munch]
             branch: str
             return_pr: Munch
 
@@ -913,7 +913,7 @@ class TestGitSeriesAlreadyApplied(unittest.IsolatedAsyncioTestCase):
         # Patchwork client
         self._pw = get_default_pw_client()
 
-    async def _get_series(self, m: aioresponses, summaries: list[str]) -> Series:
+    async def _get_series(self, m: aioresponses, summaries: List[str]) -> Series:
         """
         Given a list of commit summaries, return a `Series` that
         contains such commits.

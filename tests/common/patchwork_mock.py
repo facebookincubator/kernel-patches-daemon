@@ -43,7 +43,7 @@ def get_default_pw_client() -> PatchworkMock:
     )
 
 
-def init_pw_responses(m: aioresponses, data: dict[str, Any]) -> None:
+def init_pw_responses(m: aioresponses, data: Dict[str, Any]) -> None:
     """
     Setup an aioresponses mock to return patchwork answers.
 
@@ -71,7 +71,7 @@ def init_pw_responses(m: aioresponses, data: dict[str, Any]) -> None:
     m.get(re.compile(r"^.*$"), status=200, body=b"[]")
 
 
-def get_dict_key(d: dict[str, Any], idx: int = 0) -> str:
+def get_dict_key(d: Dict[str, Any], idx: int = 0) -> str:
     """
     Given a dictionary, get a list of keys and return the one a `idx`.
     """
@@ -82,7 +82,7 @@ FOO_SERIES_FIRST = 2
 FOO_SERIES_LAST = 10
 
 DEFAULT_FREEZE_DATE = "2010-07-23T00:00:00"
-DEFAULT_TEST_RESPONSES: dict[str, Any] = {
+DEFAULT_TEST_RESPONSES: Dict[str, Any] = {
     "https://127.0.0.1/api/1.1/series/?q=foo": [
         # Does not match the subject name
         {

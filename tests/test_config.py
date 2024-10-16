@@ -24,7 +24,7 @@ from kernel_patches_daemon.config import (
 )
 
 
-def read_fixture(filepath: str) -> dict[str, str | int | bool | dict]:
+def read_fixture(filepath: str) -> Dict[str, Union[str, int, bool, Dict]]:
     with open(os.path.join(os.path.dirname(__file__), filepath)) as f:
         return json.load(f)
 
@@ -43,7 +43,7 @@ class TestConfig(unittest.TestCase):
         @dataclass
         class TestCase:
             name: str
-            tag_to_branch_mapping: dict[str, list[str]]
+            tag_to_branch_mapping: Dict[str, List[str]]
 
         test_cases = [
             TestCase(
@@ -85,7 +85,7 @@ class TestConfig(unittest.TestCase):
         @dataclass
         class TestCase:
             name: str
-            tag_to_branch_mapping: dict[str, list[str]]
+            tag_to_branch_mapping: Dict[str, List[str]]
 
         test_cases = [
             TestCase(
