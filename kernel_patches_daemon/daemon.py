@@ -11,7 +11,7 @@ import logging
 import signal
 import threading
 from collections.abc import Callable
-from typing import Final
+from typing import Dict, Final, Optional
 
 from kernel_patches_daemon.config import KPDConfig
 from kernel_patches_daemon.github_sync import GithubSync

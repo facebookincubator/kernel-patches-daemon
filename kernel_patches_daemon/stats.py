@@ -9,6 +9,7 @@
 import logging
 import time
 from collections.abc import Iterable
+from typing import Dict, Optional, Set, Union
 
 from opentelemetry import metrics
 from opentelemetry.util.types import Attributes

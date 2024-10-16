@@ -9,7 +9,7 @@
 import datetime
 import unittest
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List, Optional
 from unittest.mock import MagicMock, patch
 
 import freezegun

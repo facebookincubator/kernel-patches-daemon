@@ -28,7 +28,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE
-from typing import Any, Final, IO
+from typing import Any, Dict, Final, IO, List, Optional, Tuple
 
 import dateutil.parser
 import git

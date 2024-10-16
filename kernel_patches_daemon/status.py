@@ -8,6 +8,7 @@
 
 from collections.abc import Iterable
 from enum import Enum
+from typing import Optional
 
 
 class Status(Enum):

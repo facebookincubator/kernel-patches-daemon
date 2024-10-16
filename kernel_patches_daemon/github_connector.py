@@ -10,6 +10,7 @@ import logging
 import os
 from datetime import timedelta
 from enum import Enum
+from typing import Optional
 from urllib.parse import urlparse
 
 from github import Auth, Github, GithubException, GithubIntegration

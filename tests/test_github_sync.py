@@ -9,7 +9,7 @@
 import copy
 import unittest
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from kernel_patches_daemon.branch_worker import NewPRWithNoChangeException
