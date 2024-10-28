@@ -10,8 +10,7 @@ import asyncio
 import logging
 import signal
 import threading
-from collections.abc import Callable
-from typing import Final
+from typing import Callable, Dict, Final, Optional
 
 from kernel_patches_daemon.config import KPDConfig
 from kernel_patches_daemon.github_sync import GithubSync
@@ -33,8 +32,8 @@ class KernelPatchesWorker:
     def __init__(
         self,
         kpd_config: KPDConfig,
-        labels_cfg: dict[str, str],
-        metrics_logger: Callable | None = None,
+        labels_cfg: Dict[str, str],
+        metrics_logger: Optional[Callable] = None,
         loop_delay: int = DEFAULT_LOOP_DELAY,
         max_concurrent_restarts: int = DEFAULT_MAX_CONCURRENT_RESTARTS,
     ) -> None:
@@ -77,12 +76,12 @@ class KernelPatchesDaemon:
     def __init__(
         self,
         kpd_config: KPDConfig,
-        labels_cfg: dict[str, str],
-        metrics_logger: Callable | None = None,
+        labels_cfg: Dict[str, str],
+        metrics_logger: Optional[Callable] = None,
         max_concurrent_restarts: int = 1,
     ) -> None:
         self._stopping_lock = threading.Lock()
-        self._task: asyncio.Task | None = None
+        self._task: Optional[asyncio.Task] = None
         self.worker = KernelPatchesWorker(
             kpd_config=kpd_config,
             labels_cfg=labels_cfg,

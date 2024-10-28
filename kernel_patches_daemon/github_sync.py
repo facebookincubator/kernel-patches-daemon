@@ -9,8 +9,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import Sequence
-from typing import Final
+from typing import Dict, Final, List, Optional, Sequence
 
 from github import Auth
 from github.PullRequest import PullRequest
@@ -58,7 +57,7 @@ DEFAULT_HTTP_RETRIES: Final[int] = 3
 
 def github_app_auth_from_branch_config(
     branch_config: BranchConfig,
-) -> Auth.AppInstallationAuth | None:
+) -> Optional[Auth.AppInstallationAuth]:
     if app_auth_config := branch_config.github_app_auth:
         return Auth.AppInstallationAuth(
             Auth.AppAuth(
@@ -87,7 +86,7 @@ class GithubSync(Stats):
     def __init__(
         self,
         kpd_config: KPDConfig,
-        labels_cfg: dict[str, str],
+        labels_cfg: Dict[str, str],
         http_retries: int = DEFAULT_HTTP_RETRIES,
     ) -> None:
         self.pw = Patchwork(
@@ -98,7 +97,7 @@ class GithubSync(Stats):
             http_retries=http_retries,
         )
         self.tag_to_branch_mapping = kpd_config.tag_to_branch_mapping
-        self.workers: dict[str, BranchWorker] = {
+        self.workers: Dict[str, BranchWorker] = {
             branch: BranchWorker(
                 patchwork=self.pw,
                 labels_cfg=labels_cfg,
@@ -132,7 +131,7 @@ class GithubSync(Stats):
             }
         )
 
-    async def get_mapped_branches(self, series: Series) -> list[str]:
+    async def get_mapped_branches(self, series: Series) -> List[str]:
         for tag in self.tag_to_branch_mapping:
             if tag in await series.all_tags():
                 mapped_branches = self.tag_to_branch_mapping[tag]
@@ -171,7 +170,7 @@ class GithubSync(Stats):
 
     async def checkout_and_patch_safe(
         self, worker, branch_name: str, series_to_apply: Series
-    ) -> PullRequest | None:
+    ) -> Optional[PullRequest]:
         try:
             self.increment_counter("all_known_subjects")
             pr = await worker.checkout_and_patch(branch_name, series_to_apply)
