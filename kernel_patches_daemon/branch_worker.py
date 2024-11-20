@@ -87,9 +87,7 @@ MERGE_CONFLICT_LABEL = "merge-conflict"
 UPSTREAM_REMOTE_NAME = "upstream"
 
 
-EMAIL_TEMPLATE_BASE: Final[
-    str
-] = """\
+EMAIL_TEMPLATE_BASE: Final[str] = """\
 Dear patch submitter,
 
 CI has tested the following submission:
@@ -103,26 +101,20 @@ questions or feedback, please reach out to the Meta Kernel CI team at
 kernel-ci@meta.com.
 """
 
-EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[
-    str
-] = """\
+EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[str] = """\
 PR:         {github_pr_url}
 
 Please rebase your submission onto the most recent upstream change and resubmit
 the patch to get it tested again.
 """
 
-EMAIL_TEMPLATE_SUCCESS_BODY: Final[
-    str
-] = """\
+EMAIL_TEMPLATE_SUCCESS_BODY: Final[str] = """\
 Matrix:     {github_actions_url}
 
 No further action is necessary on your part.
 """
 
-EMAIL_TEMPLATE_FAILURE_BODY: Final[
-    str
-] = """\
+EMAIL_TEMPLATE_FAILURE_BODY: Final[str] = """\
 Matrix:     {github_actions_url}
 
 {inline_logs}\

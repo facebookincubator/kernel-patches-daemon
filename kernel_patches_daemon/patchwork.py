@@ -453,7 +453,6 @@ class Series:
 
     @cached(cache=TTLCache(maxsize=1, ttl=120))
     async def get_patch_binary_content(self) -> bytes:
-
         content = await self.pw_client.get_blob(self.mbox)
         logger.debug(
             f"Received patch mbox for series {self.id}, size: {len(content)} bytes"

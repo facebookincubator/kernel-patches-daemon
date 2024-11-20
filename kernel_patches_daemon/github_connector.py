@@ -65,7 +65,6 @@ class GithubConnector:
         app_auth: Optional[Auth.AppInstallationAuth] = None,
         http_retries: Optional[int] = None,
     ) -> None:
-
         assert bool(github_oauth_token) ^ bool(
             app_auth
         ), "Only one of github_oauth_token or app_auth can be set"
