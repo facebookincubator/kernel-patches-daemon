@@ -60,6 +60,10 @@ git_clone_duration: metrics.Histogram = meter.create_histogram(name="clone.durat
 git_fetch_counter: metrics.Counter = meter.create_counter(name="fetch")
 git_fetch_duration: metrics.Histogram = meter.create_histogram(name="fetch.duration_ms")
 pr_summary_report: metrics.Counter = meter.create_counter(name="pr_summary_reports")
+email_success_counter: metrics.Counter = meter.create_counter(name="email.success")
+email_failure_counter: metrics.Counter = meter.create_counter(name="email.failure")
+email_conflict_counter: metrics.Counter = meter.create_counter(name="email.conflict")
+email_send_fail_counter: metrics.Counter = meter.create_counter(name="email.send_fail")
 pr_created: metrics.Counter = meter.create_counter(name="pull_requests.created")
 pr_updated: metrics.Counter = meter.create_counter(name="pull_requests.updated")
 pr_closed: metrics.Counter = meter.create_counter(name="pull_requests.closed")
@@ -227,6 +231,15 @@ def furnish_ci_email_body(ctx: EmailBodyContext) -> str:
     )
 
 
+def bump_email_status_counters(status: Status):
+    if status == Status.SUCCESS:
+        email_success_counter.add(1)
+    elif status == Status.FAILURE:
+        email_failure_counter.add(1)
+    else:
+        email_conflict_counter.add(1)
+
+
 def generate_msg_id(host: str) -> str:
     """Generate an email message ID based on the provided host."""
     checksum = hashlib.sha256(str(time.time()).encode("utf-8")).hexdigest()
@@ -331,6 +344,7 @@ async def send_email(
     rc = await proc.wait()
     if rc != 0:
         logger.error(f"failed to send email: {stdout.decode()} {stderr.decode()}")
+        email_send_fail_counter.add(1)
 
 
 def _is_pr_flagged(pr: PullRequest) -> bool:
@@ -1201,6 +1215,7 @@ class BranchWorker(GithubConnector):
             ctx = build_email_body_context(self.repo, pr, status, series, inline_logs)
             body = furnish_ci_email_body(ctx)
             await send_email(email, series, subject, body)
+            bump_email_status_counters(status)
 
     def expire_branches(self) -> None:
         for branch in self.branches:
