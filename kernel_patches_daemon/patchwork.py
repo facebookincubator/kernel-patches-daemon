@@ -751,6 +751,10 @@ class Patchwork:
             all_series = await asyncio.gather(*tasks)
 
             for series in all_series:
+                if series.subject.strip() == "":
+                    logger.error(f"Malformed series name: {series.name}")
+                    err_malformed_series.add(1)
+                    continue
                 self.known_series[series.id] = series
 
                 if series.subject not in subjects:
