@@ -292,7 +292,7 @@ def build_email(
     ]
 
     to_list = copy.copy(config.smtp_to)
-    cc_list = copy.copy(config.smtp_cc)
+    cc_list = copy.copy(config.smtp_cc).split(",")
 
     if config.ignore_allowlist or email_in_submitter_allowlist(
         series.submitter_email, config.submitter_allowlist
