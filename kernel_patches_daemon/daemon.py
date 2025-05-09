@@ -24,7 +24,7 @@ meter: metrics.Meter = metrics.get_meter("worker")
 success_counter: Counter = meter.create_counter(name="runs.success")
 fail_counter: Counter = meter.create_counter(name="runs.failed")
 
-DEFAULT_LOOP_DELAY: Final[int] = 60
+DEFAULT_LOOP_DELAY: Final[int] = 120
 DEFAULT_MAX_CONCURRENT_RESTARTS: Final[int] = 5
 
 
